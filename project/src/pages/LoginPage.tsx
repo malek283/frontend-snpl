@@ -247,6 +247,3 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-okiuj
-yhtgrfcdsxqwkh,jhgnbv
-k,jhgnfb
