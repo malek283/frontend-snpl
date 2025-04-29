@@ -85,12 +85,13 @@ export interface Admin extends User {
 
 
 
-
-
-
-
-
-
+export interface CategoryBoutique {
+  id: number;               // Django génère automatiquement ce champ
+  nom: string;              // correspond à CharField
+  image: string | null;     // ImageField devient une URL ou null
+  created_at: string;       // DateTimeField => string (format ISO)
+  updated_at: string;       // idem
+}
 
 
 

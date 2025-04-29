@@ -1,102 +1,56 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Plus, Trash2, Edit, MoreHorizontal, ChevronDown, ChevronRight, X, Check, Image as ImageIcon, Upload } from 'lucide-react';
+
+import { useState, useEffect, useRef } from 'react';
+import { Search, Filter, Plus, Trash2, Edit, X, Image as ImageIcon, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface Category {
-  id: number;
-  name: string;
-  image?: string;
-  products: number;
-  subcategories: Subcategory[];
-  shopId?: number;
-}
-
-interface Subcategory {
-  id: number;
-  name: string;
-  image?: string;
-  products: number;
-}
+import { createCategory, deleteCategory, getCategories, updateCategory } from '../../services/categorieService';
+import { CategoryBoutique } from '../../types';
 
 const Categories: React.FC = () => {
-  const [expandedCategories, setExpandedCategories] = useState<number[]>([1]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [currentCategory, setCurrentCategory] = useState<Category | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [newCategory, setNewCategory] = useState({
-    name: '',
-    image: '',
-    isSubcategory: false,
-    parentId: 0
+  const [categories, setCategories] = useState<CategoryBoutique[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [currentCategory, setCurrentCategory] = useState<CategoryBoutique | null>(null);
+  const [editMode, setEditMode] = useState<boolean>(false);
+  const [newCategory, setNewCategory] = useState<Partial<CategoryBoutique>>({
+    nom: '',
+    image: null,
   });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Mock data initialization with images
   useEffect(() => {
-    const mockCategories: Category[] = [
-      {
-        id: 1,
-        name: 'Electronics',
-        image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        products: 156,
-        shopId: 1,
-        subcategories: [
-          { id: 11, name: 'Smartphones', image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 65 },
-          { id: 12, name: 'Laptops', image: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 42 },
-          { id: 13, name: 'Accessories', image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 49 }
-        ]
-      },
-      {
-        id: 2,
-        name: 'Clothing',
-        image: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        products: 243,
-        shopId: 1,
-        subcategories: [
-          { id: 21, name: 'Men\'s Wear', image: 'https://images.unsplash.com/photo-1520367445093-50dc08a59d9d?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 86 },
-          { id: 22, name: 'Women\'s Wear', image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 124 },
-          { id: 23, name: 'Kids\' Wear', image: 'https://images.unsplash.com/photo-1590005024862-6b67679a29fb?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 33 }
-        ]
-      },
-      {
-        id: 3,
-        name: 'Home & Garden',
-        image: 'https://images.unsplash.com/photo-1583845112203-454375aa0a52?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60',
-        products: 178,
-        shopId: 2,
-        subcategories: [
-          { id: 31, name: 'Furniture', image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 45 },
-          { id: 32, name: 'Kitchen', image: 'https://images.unsplash.com/photo-1600585152220-90363fe7e115?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 68 },
-          { id: 33, name: 'Decor', image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60', products: 65 }
-        ]
+    const fetchCategories = async () => {
+      setIsLoading(true);
+      try {
+        const response = await getCategories();
+        setCategories(response);
+      } catch (error) {
+        toast.error('Failed to load categories');
+        console.error('Error fetching categories:', error);
+      } finally {
+        setIsLoading(false);
       }
-    ];
-    
-    const currentShopId = 1;
-    setCategories(mockCategories.filter(cat => cat.shopId === currentShopId));
-  }, []);
+    };
 
-  const toggleCategory = (id: number) => {
-    setExpandedCategories(prev => 
-      prev.includes(id) 
-        ? prev.filter(catId => catId !== id) 
-        : [...prev, id]
-    );
-  };
+    fetchCategories();
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image size must be less than 2MB');
+        return;
+      }
+      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewImage(reader.result as string);
-        setNewCategory({...newCategory, image: reader.result as string});
       };
       reader.readAsDataURL(file);
     }
@@ -106,175 +60,129 @@ const Categories: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const handleAddCategory = () => {
-    if (!newCategory.name.trim()) {
+  const handleAddCategory = async () => {
+    if (!newCategory.nom?.trim()) {
       toast.error('Category name is required');
       return;
     }
 
-    const newId = Math.max(0, ...categories.flatMap(c => [c.id, ...c.subcategories.map(s => s.id)])) + 1;
+    try {
+      const categoryData: Partial<CategoryBoutique> & { imageFile?: File } = {
+        nom: newCategory.nom,
+        imageFile: imageFile || undefined,
+      };
 
-    if (newCategory.isSubcategory && newCategory.parentId) {
-      setCategories(categories.map(cat => 
-        cat.id === newCategory.parentId 
-          ? {
-              ...cat,
-              subcategories: [
-                ...cat.subcategories,
-                { 
-                  id: newId, 
-                  name: newCategory.name, 
-                  image: newCategory.image,
-                  products: 0 
-                }
-              ]
-            }
-          : cat
-      ));
-      toast.success('Subcategory added successfully!');
-    } else {
-      setCategories([
-        ...categories,
-        {
-          id: newId,
-          name: newCategory.name,
-          image: newCategory.image,
-          products: 0,
-          shopId: 1,
-          subcategories: []
-        }
-      ]);
+      const response = await createCategory(categoryData);
+      setCategories([...categories, response]);
       toast.success('Category added successfully!');
+      resetForm();
+      setIsAddModalOpen(false);
+      
+    } catch (error) {
+      toast.error('Failed to add category');
+      console.error('Error adding category:', error);
     }
-
-    resetForm();
-    setIsAddModalOpen(false);
   };
 
-  const handleEditCategory = (category: Category, isSubcategory: boolean, parentId?: number) => {
+  const handleEditCategory = (category: CategoryBoutique) => {
     setEditMode(true);
     setCurrentCategory(category);
     setNewCategory({
-      name: category.name,
-      image: category.image || '',
-      isSubcategory,
-      parentId: parentId || 0
+      nom: category.nom,
+      image: category.image || null,
     });
     setPreviewImage(category.image || null);
+    setImageFile(null);
     setIsAddModalOpen(true);
   };
 
-  const handleUpdateCategory = () => {
+  const handleUpdateCategory = async () => {
     if (!currentCategory) return;
 
-    if (newCategory.isSubcategory && newCategory.parentId) {
-      setCategories(categories.map(cat => 
-        cat.id === newCategory.parentId
-          ? {
-              ...cat,
-              subcategories: cat.subcategories.map(sub => 
-                sub.id === currentCategory.id 
-                  ? { ...sub, name: newCategory.name, image: newCategory.image }
-                  : sub
-              )
-            }
-          : cat
-      ));
-    } else {
-      setCategories(categories.map(cat => 
-        cat.id === currentCategory.id
-          ? { ...cat, name: newCategory.name, image: newCategory.image }
-          : cat
-      ));
-    }
+    try {
+      const categoryData: Partial<CategoryBoutique> & { imageFile?: File } = {
+        nom: newCategory.nom,
+        imageFile: imageFile || undefined,
+      };
 
-    toast.success('Category updated successfully!');
-    resetForm();
-    setIsAddModalOpen(false);
+      const response = await updateCategory(currentCategory.id, categoryData);
+      setCategories(categories.map(cat =>
+        cat.id === currentCategory.id ? response : cat
+      ));
+      toast.success('Category updated successfully!');
+      resetForm();
+      setIsAddModalOpen(false);
+    } catch (error) {
+      toast.error('Failed to update category');
+      console.error('Error updating category:', error);
+    }
   };
 
-  const handleDeleteClick = (category: Category, isSubcategory: boolean, parentId?: number) => {
+  const handleDeleteClick = (category: CategoryBoutique) => {
     setCurrentCategory(category);
-    setNewCategory({
-      name: '',
-      image: '',
-      isSubcategory,
-      parentId: parentId || 0
-    });
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteCategory = () => {
+  const handleDeleteCategory = async () => {
     if (!currentCategory) return;
 
-    if (newCategory.isSubcategory && newCategory.parentId) {
-      setCategories(categories.map(cat => 
-        cat.id === newCategory.parentId
-          ? {
-              ...cat,
-              subcategories: cat.subcategories.filter(sub => sub.id !== currentCategory.id)
-            }
-          : cat
-      ));
-    } else {
+    try {
+      await deleteCategory(currentCategory.id);
       setCategories(categories.filter(cat => cat.id !== currentCategory.id));
+      toast.success('Category deleted successfully!');
+      resetForm();
+      setIsDeleteModalOpen(false);
+    } catch (error) {
+      toast.error('Failed to delete category');
+      console.error('Error deleting category:', error);
     }
-
-    toast.success('Category deleted successfully!');
-    resetForm();
-    setIsDeleteModalOpen(false);
   };
 
   const resetForm = () => {
     setNewCategory({
-      name: '',
-      image: '',
-      isSubcategory: false,
-      parentId: 0
+      nom: '',
+      image: null,
     });
     setCurrentCategory(null);
     setEditMode(false);
     setPreviewImage(null);
+    setImageFile(null);
   };
 
   const filteredCategories = categories.filter(category =>
-    category.subcategories.some(sub =>
-      sub.name.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    category.nom.toLowerCase().includes(searchTerm.toLowerCase())
   );
-  
 
-  const totalProducts = categories.reduce((sum, cat) => 
-    sum + cat.products + cat.subcategories.reduce((subSum, sub) => subSum + sub.products, 0), 
-  0);
-
-  // Animation variants
   const fadeIn = {
     hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { duration: 0.3 } }
+    visible: { opacity: 1, transition: { duration: 0.3 } },
   };
 
   const slideUp = {
     hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { duration: 0.3 } }
+    visible: { y: 0, opacity: 1, transition: { duration: 0.3 } },
+  };
+
+  const cardVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.3 } },
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial="hidden"
       animate="visible"
       variants={fadeIn}
       className="space-y-6 p-4 md:p-6"
     >
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <motion.h2 
+        <motion.h2
           variants={slideUp}
           className="text-2xl md:text-3xl font-bold text-gray-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent"
         >
           Shop Categories
         </motion.h2>
-        <motion.button 
+        <motion.button
           variants={slideUp}
           onClick={() => setIsAddModalOpen(true)}
           className="inline-flex items-center px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 shadow-lg hover:shadow-xl"
@@ -284,10 +192,9 @@ const Categories: React.FC = () => {
         </motion.button>
       </div>
 
-      {/* Filters and Search */}
-      <motion.div 
+      <motion.div
         variants={slideUp}
-        className="bg-white rounded-xl p-5 shadow-lg border border-gray-100 space-y-4 backdrop-blur-sm bg-opacity-90"
+        className="bg-white rounded-xl p-5 shadow-lg border-gray-100 space-y-4 backdrop-blur-sm bg-opacity-90"
       >
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
@@ -302,7 +209,6 @@ const Categories: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
           <div className="flex gap-2">
             <button className="px-5 py-3 border border-gray-200 rounded-xl flex items-center hover:bg-gray-50 transition-colors duration-200 shadow-sm">
               <Filter size={16} className="mr-2 text-gray-500" />
@@ -312,18 +218,17 @@ const Categories: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Stats cards */}
-      <motion.div 
+      <motion.div
         variants={slideUp}
         className="grid grid-cols-1 md:grid-cols-3 gap-5"
       >
         {[
           { title: 'Total Categories', value: categories.length.toString(), icon: 'layers', color: 'bg-indigo-100 text-indigo-600', bg: 'from-indigo-50 to-indigo-100' },
-          { title: 'Total Products', value: totalProducts.toString(), icon: 'package', color: 'bg-emerald-100 text-emerald-600', bg: 'from-emerald-50 to-emerald-100' },
-          { title: 'Avg. Products per Category', value: categories.length > 0 ? Math.round(totalProducts / categories.length).toString() : '0', icon: 'bar-chart', color: 'bg-amber-100 text-amber-600', bg: 'from-amber-50 to-amber-100' }
+          { title: 'Total Products', value: '0', icon: 'package', color: 'bg-emerald-100 text-emerald-600', bg: 'from-emerald-50 to-emerald-100' },
+          { title: 'Avg. Products per Category', value: '0', icon: 'bar-chart', color: 'bg-amber-100 text-amber-600', bg: 'from-amber-50 to-amber-100' },
         ].map((stat, index) => (
-          <div 
-            key={index} 
+          <div
+            key={index}
             className={`bg-gradient-to-br ${stat.bg} rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow duration-300`}
           >
             <div className={`w-14 h-14 rounded-xl ${stat.color} flex items-center justify-center mb-4 shadow-inner`}>
@@ -339,196 +244,93 @@ const Categories: React.FC = () => {
         ))}
       </motion.div>
 
-      {/* Categories Table */}
-      <motion.div 
+      <motion.div
         variants={slideUp}
-        className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
+        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
       >
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gradient-to-r from-indigo-50 to-purple-50">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">Products</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {filteredCategories.length > 0 ? (
-                filteredCategories.map((category) => (
-                  <React.Fragment key={category.id}>
-                    <tr className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          {category.subcategories.length > 0 && (
-                            <button 
-                              onClick={() => toggleCategory(category.id)}
-                              className="mr-3 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                            >
-                              {expandedCategories.includes(category.id) ? 
-                                <ChevronDown size={18} className="text-gray-500 group-hover:text-indigo-600" /> : 
-                                <ChevronRight size={18} className="text-gray-500 group-hover:text-indigo-600" />
-                              }
-                            </button>
-                          )}
-                          {category.subcategories.length === 0 && <div className="w-9"></div>}
-                          <div className="flex items-center">
-                            {category.image && (
-                              <div className="w-10 h-10 rounded-lg overflow-hidden mr-3 shadow-sm">
-                                <img 
-                                  src={category.image} 
-                                  alt={category.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <div>
-                              <div className="text-sm font-semibold text-gray-900">{category.name}</div>
-                              <div className="text-xs text-gray-500">
-                                {category.subcategories.length} subcategories
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-700 font-medium">{category.products}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <div className="flex justify-end items-center space-x-2">
-                          <button 
-                            onClick={() => handleEditCategory(category, false)}
-                            className="p-2 rounded-full hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 transition-colors" 
-                            title="Edit"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteClick(category, false)}
-                            className="p-2 rounded-full hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors" 
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setIsAddModalOpen(true);
-                              setNewCategory(prev => ({...prev, isSubcategory: true, parentId: category.id}));
-                            }}
-                            className="p-2 rounded-full hover:bg-green-50 text-gray-500 hover:text-green-600 transition-colors" 
-                            title="Add Subcategory"
-                          >
-                            <Plus size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Subcategories */}
-                    {expandedCategories.includes(category.id) && category.subcategories.map((subcat) => (
-                      <motion.tr 
-                        key={subcat.id}
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="bg-gray-50 hover:bg-gray-100 transition-colors"
-                      >
-                        <td className="px-6 py-3">
-                          <div className="flex items-center ml-12">
-                            {subcat.image && (
-                              <div className="w-8 h-8 rounded-md overflow-hidden mr-3 shadow-sm">
-                                <img 
-                                  src={subcat.image} 
-                                  alt={subcat.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <div className="text-sm text-gray-700">{subcat.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-700 font-medium">
-                          {subcat.products}
-                        </td>
-                        <td className="px-6 py-3 whitespace-nowrap text-right text-sm">
-                          <div className="flex justify-end items-center space-x-2">
-                            <button 
-                              onClick={() => handleEditCategory(subcat, true, category.id)}
-                              className="p-2 rounded-full hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 transition-colors" 
-                              title="Edit"
-                            >
-                              <Edit size={16} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteClick(subcat, true, category.id)}
-                              className="p-2 rounded-full hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors" 
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </React.Fragment>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center">
-                    <div className="flex flex-col items-center justify-center space-y-3">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <ImageIcon size={24} className="text-gray-400" />
-                      </div>
-                      <h4 className="text-lg font-medium text-gray-700">No categories found</h4>
-                      <p className="text-sm text-gray-500">Create your first category to get started</p>
-                      <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-                      >
-                        Add Category
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-gray-600">
-            Showing <span className="font-medium">{filteredCategories.length}</span> main categories with{' '}
-            <span className="font-medium">
-              {filteredCategories.reduce((sum, cat) => sum + cat.subcategories.length, 0)}
-            </span>{' '}
-            subcategories
-          </p>
-          <div className="flex space-x-2">
-            <button className="px-3 py-1 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-              Previous
-            </button>
-            <button className="px-3 py-1 border border-indigo-200 bg-indigo-50 text-indigo-600 font-medium rounded-lg text-sm">
-              1
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              2
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              Next
+        {isLoading ? (
+          <div className="col-span-full flex justify-center items-center py-8">
+            <div className="flex items-center">
+              <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="ml-2 text-gray-600">Loading categories...</span>
+            </div>
+          </div>
+        ) : filteredCategories.length > 0 ? (
+          filteredCategories.map((category) => (
+            <motion.div
+              key={category.id}
+              variants={cardVariants}
+              initial="hidden"
+              animate="visible"
+              className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-shadow duration-300"
+            >
+              <div className="relative">
+                {category.image ? (
+                  <img
+                    src={category.image}
+                    alt={category.nom}
+                    className="w-full h-48 object-cover"
+                    onError={(e) => {
+                      console.error(`Failed to load image for ${category.nom}: ${category.image}`);
+                      e.currentTarget.src = 'https://via.placeholder.com/150';
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+                    <ImageIcon size={48} className="text-gray-400" />
+                  </div>
+                )}
+                <div className="absolute top-2 right-2 flex space-x-2">
+                  <button
+                    onClick={() => handleEditCategory(category)}
+                    className="p-2 bg-white rounded-full shadow-md hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 transition-colors"
+                    title="Edit"
+                  >
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(category)}
+                    className="p-2 bg-white rounded-full shadow-md hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4">
+                <h3 className="text-lg font-semibold text-gray-900 truncate">{category.nom}</h3>
+              </div>
+            </motion.div>
+          ))
+        ) : (
+          <div className="col-span-full flex flex-col items-center justify-center py-8">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+              <ImageIcon size={24} className="text-gray-400" />
+            </div>
+            <h4 className="text-lg font-medium text-gray-700 mt-3">No categories found</h4>
+            <p className="text-sm text-gray-500 mt-1">Create your first category to get started</p>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            >
+              Add Category
             </button>
           </div>
-        </div>
+        )}
       </motion.div>
 
-      {/* Add/Edit Category Modal */}
       <AnimatePresence>
         {isAddModalOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
           >
-            <motion.div 
+            <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 20, opacity: 0 }}
@@ -539,7 +341,7 @@ const Categories: React.FC = () => {
                   <h3 className="text-xl font-bold text-gray-900">
                     {editMode ? 'Edit Category' : 'Add New Category'}
                   </h3>
-                  <button 
+                  <button
                     onClick={() => {
                       setIsAddModalOpen(false);
                       resetForm();
@@ -549,21 +351,19 @@ const Categories: React.FC = () => {
                     <X size={20} />
                   </button>
                 </div>
-
                 <div className="space-y-5">
-                  {/* Image Upload */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Category Image
                     </label>
-                    <div 
+                    <div
                       onClick={triggerFileInput}
                       className={`w-full h-40 rounded-xl border-2 border-dashed ${previewImage ? 'border-transparent' : 'border-gray-300 hover:border-indigo-400'} overflow-hidden cursor-pointer transition-all duration-200 flex items-center justify-center`}
                     >
                       {previewImage ? (
-                        <img 
-                          src={previewImage} 
-                          alt="Preview" 
+                        <img
+                          src={previewImage}
+                          alt="Preview"
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -585,7 +385,7 @@ const Categories: React.FC = () => {
                       <button
                         onClick={() => {
                           setPreviewImage(null);
-                          setNewCategory({...newCategory, image: ''});
+                          setImageFile(null);
                         }}
                         className="mt-2 text-sm text-red-600 hover:text-red-700 flex items-center"
                       >
@@ -594,8 +394,6 @@ const Categories: React.FC = () => {
                       </button>
                     )}
                   </div>
-
-                  {/* Category Name */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Category Name
@@ -604,49 +402,10 @@ const Categories: React.FC = () => {
                       type="text"
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                       placeholder="Enter category name"
-                      value={newCategory.name}
-                      onChange={(e) => setNewCategory({...newCategory, name: e.target.value})}
+                      value={newCategory.nom || ''}
+                      onChange={(e) => setNewCategory({ ...newCategory, nom: e.target.value })}
                     />
                   </div>
-
-                  {/* Subcategory Checkbox (only when adding new) */}
-                  {!editMode && (
-                    <div className="space-y-3">
-                      <label className="flex items-center space-x-3">
-                        <div className="relative">
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={newCategory.isSubcategory}
-                            onChange={(e) => setNewCategory({...newCategory, isSubcategory: e.target.checked})}
-                          />
-                          <div className={`w-10 h-6 rounded-full shadow-inner transition-colors duration-200 ${newCategory.isSubcategory ? 'bg-indigo-600' : 'bg-gray-300'}`}>
-                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${newCategory.isSubcategory ? 'translate-x-5' : 'translate-x-1'}`}></div>
-                          </div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-700">This is a subcategory</span>
-                      </label>
-
-                      {newCategory.isSubcategory && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Parent Category
-                          </label>
-                          <select
-                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
-                            value={newCategory.parentId}
-                            onChange={(e) => setNewCategory({...newCategory, parentId: parseInt(e.target.value)})}
-                          >
-                            <option value={0}>Select a parent category</option>
-                            {categories.map(cat => (
-                              <option key={cat.id} value={cat.id}>{cat.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   <div className="flex justify-end space-x-3 pt-2">
                     <button
                       onClick={() => {
@@ -671,16 +430,15 @@ const Categories: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {isDeleteModalOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -691,14 +449,13 @@ const Categories: React.FC = () => {
                   <h3 className="text-xl font-bold text-gray-900">
                     Confirm Deletion
                   </h3>
-                  <button 
+                  <button
                     onClick={() => setIsDeleteModalOpen(false)}
                     className="p-1 rounded-full hover:bg-gray-100 transition-colors"
                   >
                     <X size={20} />
                   </button>
                 </div>
-
                 <div className="space-y-5">
                   <div className="bg-red-50 p-4 rounded-lg">
                     <div className="flex">
@@ -713,14 +470,12 @@ const Categories: React.FC = () => {
                         </h3>
                         <div className="mt-2 text-sm text-red-700">
                           <p>
-                            Are you sure you want to delete the category "{currentCategory?.name}"?
-                            {newCategory.isSubcategory ? '' : ' All subcategories will also be deleted.'}
+                            Are you sure you want to delete the category "{currentCategory?.nom}"?
                           </p>
                         </div>
                       </div>
                     </div>
                   </div>
-
                   <div className="flex justify-end space-x-3">
                     <button
                       onClick={() => setIsDeleteModalOpen(false)}

@@ -1,11 +1,13 @@
 from rest_framework import serializers
 from .models import CategoryBoutique, Boutique, CategoryProduit, Produit
 
-# Serializer pour la catégorie de boutique
 class CategoryBoutiqueSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(allow_null=True, required=False)
+
     class Meta:
         model = CategoryBoutique
-        fields = '__all__'  # Cela inclut tous les champs du modèle
+        fields = ['id', 'nom', 'image', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 # Serializer pour la boutique
 class BoutiqueSerializer(serializers.ModelSerializer):
