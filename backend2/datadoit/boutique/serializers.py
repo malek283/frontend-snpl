@@ -9,16 +9,25 @@ class CategoryBoutiqueSerializer(serializers.ModelSerializer):
         fields = ['id', 'nom', 'image', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-# Serializer pour la boutique
 class BoutiqueSerializer(serializers.ModelSerializer):
-    category_boutique = CategoryBoutiqueSerializer(read_only=True)  # Inclut la catégorie de la boutique
-    # Si tu veux inclure un champ pour la catégorie, tu peux ajouter :
-    # category_boutique_id = serializers.PrimaryKeyRelatedField(queryset=CategoryBoutique.objects.all(), write_only=True)
-    
+    category_boutique = CategoryBoutiqueSerializer(read_only=True)
+    category_boutique_id = serializers.PrimaryKeyRelatedField(
+        queryset=CategoryBoutique.objects.all(),
+        source='category_boutique',
+        write_only=True,
+        allow_null=False,
+    )
+    image = serializers.ImageField(required=False, allow_null=True)
+    logo = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     class Meta:
         model = Boutique
-        fields = '__all__'  # Cela inclut tous les champs du modèle
-
+        fields = [
+            'id', 'nom', 'description', 'logo', 'adresse', 'telephone', 'email',
+            'image', 'category_boutique', 'category_boutique_id', 'marchand',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 # Serializer pour la catégorie de produit
 class CategoryProduitSerializer(serializers.ModelSerializer):
     class Meta:

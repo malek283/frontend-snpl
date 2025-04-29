@@ -85,15 +85,18 @@ export interface Admin extends User {
 
 
 
-export interface CategoryBoutique {
-  id: number;               // Django génère automatiquement ce champ
-  nom: string;              // correspond à CharField
-  image: string | null;     // ImageField devient une URL ou null
-  created_at: string;       // DateTimeField => string (format ISO)
-  updated_at: string;       // idem
+
+export interface Boutique {
+  id: number;
+  nom: string;
+  description: string;
+  logo?: string | File; // Can be URL or File during creation
+  adresse?: string;
+  telephone?: string;
+  email?: string;
+  image?: string | File; // Can be URL or File during creation
+  category_boutique: number | CategoryBoutique; // ID or object
+  marchand: number; // Assuming marchand is an ID
+  created_at: string;
+  updated_at: string;
 }
-
-
-
-
-

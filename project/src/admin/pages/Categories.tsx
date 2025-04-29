@@ -91,7 +91,7 @@ const Categories: React.FC = () => {
       nom: category.nom,
       image: category.image || null,
     });
-    setPreviewImage(category.image || null);
+    setPreviewImage(typeof category.image === 'string' ? category.image : null);
     setImageFile(null);
     setIsAddModalOpen(true);
   };
@@ -270,7 +270,7 @@ const Categories: React.FC = () => {
               <div className="relative">
                 {category.image ? (
                   <img
-                    src={category.image}
+                    src={category.image instanceof File ? URL.createObjectURL(category.image) : category.image}
                     alt={category.nom}
                     className="w-full h-48 object-cover"
                     onError={(e) => {

@@ -17,6 +17,8 @@ import OrdersPage from './pages/OrdersPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import MerchantDashboard from './dashboard/pages/MerchantDashboard';
 import AdminDashboard from './admin/AdminDashboard';
+import CategoryPage from './admin/pages/CategoryPage';
+import ShopCreatorPage from './admin/pages/CategoryPage';
 function App() {
   return (
     
@@ -38,6 +40,9 @@ function App() {
               <Route path="register" element={<RegisterPage />} />
               <Route path="MerchantDashboard" element={<MerchantDashboard />} />
               <Route path="AdminDashboard" element={<AdminDashboard />} />
+              <Route path="ShopCreatorPage" element={<ShopCreatorPage />} />
+
+
 
               
               

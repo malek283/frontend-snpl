@@ -1,25 +1,5 @@
-import axios from 'axios';
+import api from "../axiosInstance";
 
-const API_URL = 'http://localhost:8000/api'; // Replace with your actual API URL
-
-// Create axios instance with authorization header
-const api = axios.create({
-  baseURL: API_URL,
-});
-
-// Add a request interceptor to add the token to all requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
 // Category Boutique API calls
 export const getCategoryBoutiques = async () => {
@@ -27,10 +7,7 @@ export const getCategoryBoutiques = async () => {
   return response.data;
 };
 
-export const createCategoryBoutique = async (data: any) => {
-  const response = await api.post('/category_boutiques/', data);
-  return response.data;
-};
+
 
 // Boutique API calls
 export const getBoutiques = async () => {
@@ -43,10 +20,6 @@ export const getBoutiqueById = async (id: number) => {
   return response.data;
 };
 
-export const createBoutique = async (data: any) => {
-  const response = await api.post('/boutiques/', data);
-  return response.data;
-};
 
 export const updateBoutique = async (id: number, data: any) => {
   const response = await api.put(`/boutiques/${id}/`, data);

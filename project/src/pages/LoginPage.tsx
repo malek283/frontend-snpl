@@ -62,7 +62,7 @@ const LoginPage = () => {
           navigate('/AdminDashboard');
           break;
         case 'marchand':
-          navigate('/MerchantDashboard');
+          navigate('/ShopCreatorPage');
           break;
         case 'client':
           navigate('/HomePage');

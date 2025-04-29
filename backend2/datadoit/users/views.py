@@ -4,7 +4,7 @@ from rest_framework import status
 from users.authentication import JWTBearerAuthentication
 from users.serializers import LoginSerializer, UserSerializer, SignupSerializer, UserUpdateSerializer
 from users.models import User
-from django_ratelimit.decorators import ratelimit
+
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
@@ -81,7 +81,7 @@ def user_list_view(request):
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='10/m', method='PUT', block=True)
+
 def user_update_view(request, user_id):
     if request.user.role != 'admin':
         raise PermissionDenied("Only admins can update other users.")
@@ -94,7 +94,7 @@ def user_update_view(request, user_id):
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
-@ratelimit(key='user', rate='5/m', method='DELETE', block=True)
+
 def user_delete_view(request, user_id):
     if request.user.role != 'admin':
         raise PermissionDenied("Only admins can delete other users.")

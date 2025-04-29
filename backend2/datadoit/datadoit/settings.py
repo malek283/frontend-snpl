@@ -84,7 +84,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'datadoit',  # Remplace par le nom de ta base de données PostgreSQL
         'USER': 'postgres',             # Remplace par ton utilisateur PostgreSQL
-        'PASSWORD': 'malek123',        # Remplace par ton mot de passe PostgreSQL
+        'PASSWORD': 'moez1234',        # Remplace par ton mot de passe PostgreSQL
         'HOST': 'localhost',                   # Si PostgreSQL est sur le même serveur, sinon mets l'adresse de ton serveur
         'PORT': '5432',                        # Le port par défaut pour PostgreSQL
     }
@@ -135,7 +135,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Si ton React tourne sur localhost:3000
-    "http://localhost:5173",  # Si tu utilises Vite (vite par défaut utilise 5173)
+  " http://localhost:5175" # Si tu utilises Vite (vite par défaut utilise 5173)
 ]
 
 AUTH_USER_MODEL = 'users.User'

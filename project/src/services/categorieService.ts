@@ -58,7 +58,7 @@ export const createCategory = async (
   };
   
 
-  export const updateCategory = async (id: number, category: Partial<CategoryBoutique> & { imageFile?: File }): Promise<CategoryBoutique> => {
+  export const updateCategory = async (id: number | undefined, category: Partial<CategoryBoutique> & { imageFile?: File }): Promise<CategoryBoutique> => {
     const formData = new FormData();
     formData.append('nom', category.nom || '');
     if (category.imageFile) {
@@ -70,7 +70,7 @@ export const createCategory = async (
     return response.data;
   };
 
-export const deleteCategory = async (id: number): Promise<void> => {
+export const deleteCategory = async (id: number |undefined): Promise<void> => {
   await api.delete(`/boutique/category_boutiques/${id}/`);
 };
 
