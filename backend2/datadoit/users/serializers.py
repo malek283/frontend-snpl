@@ -126,7 +126,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'email', 'nom', 'prenom', 'telephone', 'password',
-            'solde_points', 'historique_achats', 'entreboutique_nomprise_nom', 'description'
+            'solde_points', 'historique_achats', 'boutique_nom', 'description'
         ]
         read_only_fields = ['role']
 

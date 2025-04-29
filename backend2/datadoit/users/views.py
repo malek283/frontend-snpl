@@ -105,7 +105,6 @@ def user_delete_view(request, user_id):
     user.delete()
     return Response({"message": "User deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 @api_view(['POST'])
-
 def approve_user(request, user_id):
     user = get_object_or_404(User, id=user_id)
     
@@ -117,7 +116,6 @@ def approve_user(request, user_id):
     return Response({'detail': 'Utilisateur approuvé avec succès.'}, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
-
 def refuse_user(request, user_id):
     user = get_object_or_404(User, id=user_id)
     
