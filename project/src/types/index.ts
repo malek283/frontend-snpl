@@ -65,6 +65,7 @@ export interface UserAdmin {
   is_approved: boolean;
   created_at: string;        // dates sont souvent string en JSON
   updated_at: string;
+  boutique_nom?: string;
 }
 
 export interface Client extends User {

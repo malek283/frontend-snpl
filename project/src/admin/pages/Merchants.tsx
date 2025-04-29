@@ -1,77 +1,91 @@
-import React from 'react';
-import { Search, Filter, Download, MoreHorizontal, Eye, Edit, Trash2, UserPlus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Download, MoreHorizontal, Eye, Edit, Trash2, UserPlus, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
-const Merchants: React.FC = () => {
-  const merchants = [
-    { 
-      id: 1, 
-      name: 'Tech Gadgets Store', 
-      owner: 'John Smith', 
-      email: 'john@techgadgets.com', 
-      stores: 3, 
-      products: 156, 
-      revenue: '$25,430.50', 
-      status: 'active', 
-      joined: '15 Aug 2023' 
-    },
-    { 
-      id: 2, 
-      name: 'Fashion Trends', 
-      owner: 'Emily Johnson', 
-      email: 'emily@fashiontrends.com', 
-      stores: 1, 
-      products: 87, 
-      revenue: '$18,320.75', 
-      status: 'active', 
-      joined: '02 Sep 2023' 
-    },
-    { 
-      id: 3, 
-      name: 'Home Decor Plus', 
-      owner: 'Michael Brown', 
-      email: 'michael@homedecor.com', 
-      stores: 2, 
-      products: 104, 
-      revenue: '$12,645.30', 
-      status: 'pending', 
-      joined: '10 Oct 2023' 
-    },
-    { 
-      id: 4, 
-      name: 'Organic Foods Co.', 
-      owner: 'Sarah Wilson', 
-      email: 'sarah@organicfoods.com', 
-      stores: 1, 
-      products: 68, 
-      revenue: '$9,875.25', 
-      status: 'active', 
-      joined: '28 Oct 2023' 
-    },
-    { 
-      id: 5, 
-      name: 'Sports Equipment Pro', 
-      owner: 'David Miller', 
-      email: 'david@sportspro.com', 
-      stores: 1, 
-      products: 112, 
-      revenue: '$15,320.00', 
-      status: 'suspended', 
-      joined: '05 Nov 2023' 
-    },
-    { 
-      id: 6, 
-      name: 'Kids Toys World', 
-      owner: 'Jennifer Davis', 
-      email: 'jennifer@kidsworld.com', 
-      stores: 2, 
-      products: 94, 
-      revenue: '$7,645.80', 
-      status: 'active', 
-      joined: '19 Nov 2023' 
-    }
-  ];
+import { UserService } from '../../services/userService';
+import { UserAdmin } from '../../types';
 
-  const getStatusColor = (status: string) => {
+// Utility to format date
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return isNaN(date.getTime())
+    ? 'N/A'
+    : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+// Derive status from is_approved and is_active
+const getMerchantStatus = (user: UserAdmin): string => {
+  if (!user.is_approved) return 'pending';
+  if (user.is_approved && user.is_active) return 'active';
+  if (user.is_approved && !user.is_active) return 'suspended';
+  return 'pending'; // Default fallback
+};
+
+interface Merchant {
+  id: number;
+  name: string;
+  owner: string;
+  email: string;
+  telephone: string;
+  status: string;
+  joined: string;
+}
+
+const Merchants = () => {
+  // State management
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    merchantId: number | null;
+    action: string;
+  }>({ open: false, merchantId: null, action: '' });
+  const [notificationMessage, setNotificationMessage] = useState<{
+    text: string;
+    type: 'success' | 'warning' | 'error';
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch merchants on component mount
+  useEffect(() => {
+    const fetchMerchants = async () => {
+      try {
+        setLoading(true);
+        const users = await UserService.getUsers();
+        const filteredMerchants: Merchant[] = users
+          .filter((user: UserAdmin) => user.role === 'marchand')
+          .map((user: UserAdmin) => ({
+            id: user.id,
+            name: `${user.prenom} ${user.nom}`,
+            owner: `${user.prenom} ${user.nom}`,
+            email: user.email,
+            telephone: user.telephone,
+            status: getMerchantStatus(user),
+            joined: user.created_at ? formatDate(user.created_at) : 'N/A',
+          }));
+        setMerchants(filteredMerchants);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch merchants';
+        setError(errorMessage);
+        setNotificationMessage({ text: 'Error fetching merchants', type: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMerchants();
+  }, []);
+
+  // Stats for the dashboard
+  const stats = {
+    total: merchants.length,
+    active: merchants.filter((m) => m.status === 'active').length,
+    pending: merchants.filter((m) => m.status === 'pending').length,
+    suspended: merchants.filter((m) => m.status === 'suspended').length,
+  };
+
+  // Generate status badge color
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
@@ -84,12 +98,259 @@ const Merchants: React.FC = () => {
     }
   };
 
+  // Handle merchant status change
+  const handleStatusChange = async (merchantId: number, newStatus: string) => {
+    try {
+      let updatedMerchant: UserAdmin;
+      const merchant = merchants.find((m) => m.id === merchantId);
+      if (!merchant) throw new Error('Merchant not found');
+
+      if (newStatus === 'active') {
+        updatedMerchant = await UserService.approveUser(merchantId);
+        updatedMerchant = await UserService.updateUser(merchantId, { is_active: true });
+      } else if (newStatus === 'rejected') {
+        updatedMerchant = await UserService.rejectUser(merchantId);
+      } else if (newStatus === 'suspended') {
+        updatedMerchant = await UserService.updateUser(merchantId, { is_active: false });
+      } else {
+        throw new Error('Invalid status');
+      }
+
+      // Update local state
+      setMerchants(prevMerchants =>
+        prevMerchants.map((m) =>
+          m.id === merchantId
+            ? {
+                ...m,
+                status: newStatus,
+                email: updatedMerchant.email,
+                name: `${updatedMerchant.prenom} ${updatedMerchant.nom}`,
+                owner: `${updatedMerchant.prenom} ${updatedMerchant.nom}`,
+                telephone: updatedMerchant.telephone,
+                joined: updatedMerchant.created_at ? formatDate(updatedMerchant.created_at) : m.joined,
+              }
+            : m
+        )
+      );
+
+      // Show notification
+      const message =
+        newStatus === 'active'
+          ? `${merchant.name} has been approved and activated`
+          : newStatus === 'suspended'
+          ? `${merchant.name} has been suspended`
+          : `${merchant.name} application has been rejected`;
+      setNotificationMessage({
+        text: message,
+        type: newStatus === 'active' ? 'success' : newStatus === 'suspended' ? 'warning' : 'error',
+      });
+      setTimeout(() => setNotificationMessage(null), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error updating merchant status';
+      setNotificationMessage({
+        text: errorMessage,
+        type: 'error',
+      });
+    } finally {
+      setConfirmDialog({ open: false, merchantId: null, action: '' });
+    }
+  };
+
+  // Handle merchant deletion
+  const handleDeleteMerchant = async (merchantId: number) => {
+    try {
+      await UserService.deleteUser(merchantId);
+      
+      // Update merchants list using functional update
+      setMerchants(prevMerchants => prevMerchants.filter((m) => m.id !== merchantId));
+      
+      // Close confirmation dialog
+      setConfirmDialog({ open: false, merchantId: null, action: '' });
+      
+      // Show success notification
+      setNotificationMessage({ text: 'Merchant deleted successfully', type: 'success' });
+      setTimeout(() => setNotificationMessage(null), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error deleting merchant';
+      setNotificationMessage({ text: errorMessage, type: 'error' });
+    }
+  };
+
+  // Handle merchant creation
+  const handleCreateMerchant = async () => {
+    try {
+      const newUser: Partial<UserAdmin> = {
+        email: `newmerchant${Date.now()}@example.com`,
+        nom: 'Merchant',
+        prenom: 'New',
+        telephone: '+1234567890',
+        role: 'marchand',
+        is_active: false,
+        is_staff: false,
+        is_approved: false,
+      };
+      const createdUser = await UserService.createUser(newUser);
+     
+      const newMerchant: Merchant = {
+        id: createdUser.id,
+        name: `${createdUser.prenom} ${createdUser.nom}`,
+        owner: `${createdUser.prenom} ${createdUser.nom}`,
+        email: createdUser.email,
+        telephone: createdUser.telephone,
+        status: getMerchantStatus(createdUser),
+        joined: createdUser.created_at ? formatDate(createdUser.created_at) : 'N/A',
+      };
+      setMerchants(prevMerchants => [...prevMerchants, newMerchant]);
+      setNotificationMessage({ text: 'Merchant created successfully', type: 'success' });
+      setTimeout(() => setNotificationMessage(null), 3000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error creating merchant';
+      setNotificationMessage({ text: errorMessage, type: 'error' });
+    }
+  };
+
+  // Filter merchants based on search term and status filter
+  const filteredMerchants = merchants.filter((merchant) => {
+    const matchesSearch =
+      merchant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      merchant.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      merchant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      merchant.telephone.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = selectedFilter === 'all' || merchant.status === selectedFilter;
+    return matchesSearch && matchesFilter;
+  });
+
+  // Notification component
+  const Notification = () => {
+    if (!notificationMessage) return null;
+    const getNotificationStyle = () => {
+      switch (notificationMessage.type) {
+        case 'success':
+          return 'bg-green-50 border-green-500 text-green-700';
+        case 'warning':
+          return 'bg-yellow-50 border-yellow-500 text-yellow-700';
+        case 'error':
+          return 'bg-red-50 border-red-500 text-red-700';
+        default:
+          return 'bg-blue-50 border-blue-500 text-blue-700';
+      }
+    };
+    return (
+      <div
+        className={`fixed top-4 right-4 p-4 rounded-lg shadow-md border-l-4 ${getNotificationStyle()} max-w-md animate-fade-in-right`}
+      >
+        <div className="flex">
+          {notificationMessage.type === 'success' && <CheckCircle className="h-5 w-5 mr-2" />}
+          {notificationMessage.type === 'warning' && <AlertTriangle className="h-5 w-5 mr-2" />}
+          {notificationMessage.type === 'error' && <XCircle className="h-5 w-5 mr-2" />}
+          <span>{notificationMessage.text}</span>
+        </div>
+      </div>
+    );
+  };
+
+  // Confirmation dialog component
+  const ConfirmationDialog = () => {
+    if (!confirmDialog.open) return null;
+    const merchant = merchants.find((m) => m.id === confirmDialog.merchantId);
+    let title, message, confirmText, confirmColor;
+    switch (confirmDialog.action) {
+      case 'approve':
+        title = 'Approve Merchant';
+        message = `Are you sure you want to approve ${merchant?.name}? This will grant them full access to the platform.`;
+        confirmText = 'Approve';
+        confirmColor = 'bg-green-600 hover:bg-green-700';
+        break;
+      case 'reject':
+        title = 'Reject Merchant';
+        message = `Are you sure you want to reject ${merchant?.name}'s application? This action cannot be undone.`;
+        confirmText = 'Reject';
+        confirmColor = 'bg-red-600 hover:bg-red-700';
+        break;
+      case 'suspend':
+        title = 'Suspend Merchant';
+        message = `Are you sure you want to suspend ${merchant?.name}? They will lose access to the platform until reinstated.`;
+        confirmText = 'Suspend';
+        confirmColor = 'bg-yellow-600 hover:bg-yellow-700';
+        break;
+      case 'delete':
+        title = 'Delete Merchant';
+        message = `Are you sure you want to delete ${merchant?.name}? This action cannot be undone.`;
+        confirmText = 'Delete';
+        confirmColor = 'bg-red-600 hover:bg-red-700';
+        break;
+      default:
+        return null;
+    }
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
+          <p className="text-gray-600 mb-6">{message}</p>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => setConfirmDialog({ open: false, merchantId: null, action: '' })}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (confirmDialog.action === 'delete') {
+                  handleDeleteMerchant(confirmDialog.merchantId!);
+                } else {
+                  const newStatus =
+                    confirmDialog.action === 'approve'
+                      ? 'active'
+                      : confirmDialog.action === 'reject'
+                      ? 'rejected'
+                      : 'suspended';
+                  handleStatusChange(confirmDialog.merchantId!, newStatus);
+                }
+              }}
+              className={`px-4 py-2 text-white rounded-lg ${confirmColor}`}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Get stat card icon
+  const getStatIcon = (title: string) => {
+    switch (title) {
+      case 'Total Merchants':
+        return <UserPlus className="w-6 h-6" />;
+      case 'Active Merchants':
+        return <CheckCircle className="w-6 h-6" />;
+      case 'Pending Approval':
+        return <AlertTriangle className="w-6 h-6" />;
+      case 'Suspended':
+        return <XCircle className="w-6 h-6" />;
+      default:
+        return null;
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 text-center">Loading merchants...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-center text-red-600">{error}</div>;
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-xl font-semibold text-gray-900">Merchant Management</h2>
-        <button className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+        <h2 className="text-2xl font-semibold text-gray-900">Merchant Management</h2>
+        <button
+          onClick={handleCreateMerchant}
+          className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+        >
           <UserPlus size={16} className="mr-2" />
           Add New Merchant
         </button>
@@ -106,15 +367,26 @@ const Merchants: React.FC = () => {
               type="text"
               placeholder="Search merchants..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          <div className="flex gap-2">
-            <button className="px-4 py-2 border border-gray-300 rounded-lg flex items-center hover:bg-gray-50">
-              <Filter size={16} className="mr-2 text-gray-500" />
-              <span>Filters</span>
-            </button>
-            
+          <div className="flex gap-2 flex-wrap">
+            <div className="relative">
+              <select
+                value={selectedFilter}
+                onChange={(e) => setSelectedFilter(e.target.value)}
+                className="appearance-none px-4 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="suspended">Suspended</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                <Filter size={16} className="text-gray-500" />
+              </div>
+            </div>
             <button className="px-4 py-2 border border-gray-300 rounded-lg flex items-center hover:bg-gray-50">
               <Download size={16} className="mr-2 text-gray-500" />
               <span>Export</span>
@@ -124,26 +396,25 @@ const Merchants: React.FC = () => {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
-          { title: 'Total Merchants', value: '583', change: '+12%', color: 'bg-blue-50 text-blue-700' },
-          { title: 'Active Merchants', value: '498', change: '+8%', color: 'bg-green-50 text-green-700' },
-          { title: 'Pending Approval', value: '45', change: '-5%', color: 'bg-yellow-50 text-yellow-700' },
-          { title: 'Suspended', value: '40', change: '+2%', color: 'bg-red-50 text-red-700' }
-        ].map((stat, index) => (
-          <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          { title: 'Total Merchants', value: stats.total, change: '+12%', color: 'bg-blue-50 text-blue-700' },
+          { title: 'Active Merchants', value: stats.active, change: '+8%', color: 'bg-green-50 text-green-700' },
+          { title: 'Pending Approval', value: stats.pending, change: '-5%', color: 'bg-yellow-50 text-yellow-700' },
+          { title: 'Suspended', value: stats.suspended, change: '+2%', color: 'bg-red-50 text-red-700' },
+        ].map((stat) => (
+          <div
+            key={stat.title}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow"
+          >
             <div className={`w-12 h-12 rounded-lg ${stat.color} flex items-center justify-center mb-3`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className={stat.color} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9 22 9 12 15 12 15 22"/>
-              </svg>
+              {getStatIcon(stat.title)}
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">{stat.value}</h3>
+            <h3 className="text-xl font-semibold text-gray-900">{stat.value}</h3>
             <p className="text-sm text-gray-500">{stat.title}</p>
             <p className="text-xs mt-2">
-              <span className={stat.change.includes('+') ? 'text-green-600' : 'text-red-600'}>
-                {stat.change}
-              </span> from last month
+              <span className={stat.change.includes('+') ? 'text-green-600' : 'text-red-600'}>{stat.change}</span> from
+              last month
             </p>
           </div>
         ))}
@@ -156,63 +427,104 @@ const Merchants: React.FC = () => {
             <thead>
               <tr className="bg-gray-50">
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Merchant</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stores</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Telephone
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {merchants.map((merchant) => (
-                <tr key={merchant.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold">
-                        {merchant.name.charAt(0)}
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{merchant.name}</div>
-                        <div className="text-xs text-gray-500">
-                          <span className="mr-1">{merchant.owner}</span> •
-                          <span className="ml-1">{merchant.email}</span>
+              {filteredMerchants.length > 0 ? (
+                filteredMerchants.map((merchant) => (
+                  <tr key={merchant.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold">
+                          {merchant.name.charAt(0)}
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{merchant.name}</div>
+                          <div className="text-xs text-gray-500">
+                            <span className="mr-1">{merchant.owner}</span> • <span className="ml-1">{merchant.email}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.stores}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.products}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{merchant.revenue}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${getStatusColor(merchant.status)}`}>
-                      {merchant.status.charAt(0).toUpperCase() + merchant.status.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.joined}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    <div className="flex justify-end items-center space-x-2">
-                      <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-blue-600" title="View Details">
-                        <Eye size={16} />
-                      </button>
-                      <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="Edit">
-                        <Edit size={16} />
-                      </button>
-                      <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-red-600" title="Delete">
-                        <Trash2 size={16} />
-                      </button>
-                      <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500" title="More Options">
-                        <MoreHorizontal size={16} />
-                      </button>
-                    </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.telephone}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${getStatusColor(
+                          merchant.status
+                        )}`}
+                      >
+                        {merchant.status.charAt(0).toUpperCase() + merchant.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{merchant.joined}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                      <div className="flex justify-end items-center space-x-2">
+                        <button
+                          className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-blue-600"
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-indigo-600"
+                          title="Edit"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        {merchant.status === 'pending' && (
+                          <button
+                            className="p-1 rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600"
+                            title="Approve Merchant"
+                            onClick={() =>
+                              setConfirmDialog({ open: true, merchantId: merchant.id, action: 'approve' })
+                            }
+                          >
+                            <CheckCircle size={16} />
+                          </button>
+                        )}
+                        {merchant.status === 'active' && (
+                          <button
+                            className="p-1 rounded-full hover:bg-yellow-100 text-gray-500 hover:text-yellow-600"
+                            title="Suspend Merchant"
+                            onClick={() =>
+                              setConfirmDialog({ open: true, merchantId: merchant.id, action: 'suspend' })
+                            }
+                          >
+                            <AlertTriangle size={16} />
+                          </button>
+                        )}
+                        <button
+                          className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-red-600"
+                          title="Delete"
+                          onClick={() => setConfirmDialog({ open: true, merchantId: merchant.id, action: 'delete' })}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500" title="More Options">
+                          <MoreHorizontal size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    No merchants found matching your criteria
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-between items-center">
-          <p className="text-sm text-gray-500">Showing 1-6 of 583 merchants</p>
+        <div className="px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="text-sm text-gray-500">Showing {filteredMerchants.length} of {merchants.length} merchants</p>
           <div className="flex space-x-1">
             <button className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed">
               Previous
@@ -220,18 +532,18 @@ const Merchants: React.FC = () => {
             <button className="px-3 py-1 border border-gray-300 bg-indigo-50 text-indigo-600 font-medium rounded text-sm">
               1
             </button>
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm">
-              2
-            </button>
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm">
-              3
-            </button>
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm">
-              Next
-            </button>
+            <button className="px-3 py-1 border border-gray-300 rounded text-sm">2</button>
+            <button className="px-3 py-1 border border-gray-300 rounded text-sm">3</button>
+            <button className="px-3 py-1 border border-gray-300 rounded text-sm">Next</button>
           </div>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog />
+
+      {/* Notification */}
+      <Notification />
     </div>
   );
 };

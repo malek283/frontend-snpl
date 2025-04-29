@@ -28,7 +28,7 @@ export class UserService {
   }
 
   // Créer un nouvel utilisateur
-  static async createUser(userData: Partial<UserAdmin>): Promise<User> {
+  static async createUser(userData: Partial<UserAdmin>): Promise<UserAdmin> {
     try {
       const response: AxiosResponse<UserAdmin> = await api.post(`/users/list/`, userData);
       return response.data;
@@ -39,7 +39,7 @@ export class UserService {
   }
 
   // Mettre à jour un utilisateur
-  static async updateUser(id: number, userData: Partial<User>): Promise<User> {
+  static async updateUser(id: number, userData: Partial<UserAdmin>): Promise<UserAdmin> {
     try {
       const response: AxiosResponse<UserAdmin> = await api.put(`/users/updat/${id}`, userData);
       return response.data;
@@ -65,6 +65,7 @@ export class UserService {
       const response: AxiosResponse<UserAdmin> = await api.post(`/users/approve/${id}`, {
         is_approved: true,
       });
+     
       return response.data as UserAdmin;
     } catch (error) {
       console.error(`Erreur lors de l'approbation de l'utilisateur ${id}:`, error);
