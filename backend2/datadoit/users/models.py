@@ -66,8 +66,7 @@ class Client(User):
         return f"Client: {self.prenom} {self.nom} ({self.email})"
 
 class Marchand(User):
-    boutique_nom = models.CharField(max_length=255, blank=True, null=True, default='')
-    description = models.TextField(blank=True, null=True, default='')
+    is_marchant = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'marchands'  # Match Sequelize tableName

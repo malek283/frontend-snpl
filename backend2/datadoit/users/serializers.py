@@ -1,21 +1,38 @@
 from rest_framework import serializers
+from boutique.models import Boutique
 from users.models import User, Client, Marchand
 from django.contrib.auth import authenticate
+
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     solde_points = serializers.IntegerField(source='client.solde_points', read_only=True, required=False)
     historique_achats = serializers.CharField(source='client.historique_achats', read_only=True, required=False)
-    boutique_nom = serializers.CharField(source='marchand.boutique_nom', read_only=True, required=False)
-    description = serializers.CharField(source='marchand.description', read_only=True, required=False)
+  
+    has_boutique = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'email', 'nom', 'prenom', 'telephone', 'role',
             'is_active', 'is_approved', 'is_staff', 'created_at', 'updated_at',
-            'solde_points', 'historique_achats', 'boutique_nom', 'description'
+            'solde_points', 'historique_achats',
+            'has_boutique'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'is_staff', 'is_approved']
+
+    
+
+   
+
+    def get_has_boutique(self, obj):
+        if obj.role == 'marchand':
+            return Boutique.objects.filter(marchand=obj).exists()
+        return False
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -23,8 +40,8 @@ class UserSerializer(serializers.ModelSerializer):
             representation.pop('solde_points', None)
             representation.pop('historique_achats', None)
         if instance.role != 'marchand':
-            representation.pop('boutique_nom', None)
             representation.pop('description', None)
+            representation.pop('has_boutique', None)
         return representation
 
 class LoginSerializer(serializers.Serializer):
@@ -42,7 +59,7 @@ class SignupSerializer(serializers.ModelSerializer):
     confirm_password = serializers.CharField(write_only=True)
     solde_points = serializers.IntegerField(default=0, allow_null=True, required=False)
     historique_achats = serializers.CharField(allow_blank=True, allow_null=True, required=False)
-    boutique_nom = serializers.CharField(default='', allow_blank=True, required=False)
+   
     description = serializers.CharField(default='', allow_blank=True, required=False)
 
     class Meta:
@@ -50,7 +67,7 @@ class SignupSerializer(serializers.ModelSerializer):
         fields = [
             'email', 'nom', 'prenom', 'telephone', 'role',
             'password', 'confirm_password',
-            'solde_points', 'historique_achats', 'boutique_nom', 'description'
+            'solde_points', 'historique_achats',  'description'
         ]
 
     def validate(self, data):
@@ -67,8 +84,8 @@ class SignupSerializer(serializers.ModelSerializer):
         # Ensure role-specific fields are only provided for the correct role
         if data['role'] == 'marchand':
             # Allow solde_points and historique_achats, disallow marchand fields
-            if any(key in data for key in ['boutique_nom', 'description']):
-                if data.get('boutique_nom') or data.get('description'):  # Check if non-empty
+            if any(key in data for key in [ 'description']):
+                if  data.get('description'):  # Check if non-empty
                     raise serializers.ValidationError({"non_field_errors": "Client cannot have marchand-specific fields."})
         elif data['role'] == ' client':
             # Allow entreprise_nom and description, disallow client fields
@@ -77,8 +94,8 @@ class SignupSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({"non_field_errors": "Marchand cannot have client-specific fields."})
         elif data['role'] == 'admin':
             # Disallow all role-specific fields
-            if any(key in data for key in ['solde_points', 'historique_achats', 'boutique_nom', 'description']):
-                if any(data.get(key) for key in ['solde_points', 'historique_achats', 'boutique_nom', 'description']):
+            if any(key in data for key in ['solde_points', 'historique_achats',  'description']):
+                if any(data.get(key) for key in ['solde_points', 'historique_achats',  'description']):
                     raise serializers.ValidationError({"non_field_errors": "Admin cannot have client or marchand-specific fields."})
 
         return data
@@ -87,28 +104,28 @@ class SignupSerializer(serializers.ModelSerializer):
         validated_data.pop('confirm_password')
         role = validated_data.pop('role')
         
-        if role == 'client':
+        if role == 'Client':
             solde_points = validated_data.pop('solde_points', 0)
             historique_achats = validated_data.pop('historique_achats', None)
-            validated_data.pop('boutique_nom', None)  # Remove marchand fields
+         
             validated_data.pop('description', None)
             user = Client.objects.create_user(**validated_data, role=role)
             user.solde_points = solde_points
             user.historique_achats = historique_achats
             user.save()
-        elif role == 'marchand':
-            boutique_nom = validated_data.pop('boutique_nom', '')
+        elif role == 'Marchand':
+     
             description = validated_data.pop('description', '')
             validated_data.pop('solde_points', None)  # Remove client fields
             validated_data.pop('historique_achats', None)
             user = Marchand.objects.create_user(**validated_data, role=role)
-            user.boutique_nom = boutique_nom
+        
             user.description = description
             user.save()
         else:  # admin
             validated_data.pop('solde_points', None)
             validated_data.pop('historique_achats', None)
-            validated_data.pop('boutique_nom', None)
+       
             validated_data.pop('description', None)
             user = User.objects.create_user(**validated_data, role=role)
         
@@ -119,26 +136,26 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=8)
     solde_points = serializers.IntegerField(required=False)
     historique_achats = serializers.CharField(allow_blank=True, allow_null=True, required=False)
-    boutique_nom = serializers.CharField(required=False)
+   
     description = serializers.CharField(required=False)
 
     class Meta:
         model = User
         fields = [
             'email', 'nom', 'prenom', 'telephone', 'password',
-            'solde_points', 'historique_achats', 'boutique_nom', 'description'
+            'solde_points', 'historique_achats', 'description'
         ]
         read_only_fields = ['role']
 
     def validate(self, data):
-        if self.instance.role == 'client':
-            if 'boutique_nom' in data or 'description' in data:
+        if self.instance.role == 'Client':
+            if  'description' in data:
                 raise serializers.ValidationError({"non_field_errors": "Client cannot update marchand-specific fields."})
-        elif self.instance.role == 'marchand':
+        elif self.instance.role == 'Marchand':
             if 'solde_points' in data or 'historique_achats' in data:
                 raise serializers.ValidationError({"non_field_errors": "Marchand cannot update client-specific fields."})
-        elif self.instance.role == 'admin':
-            if any(key in data for key in ['solde_points', 'historique_achats', 'boutique_nom', 'description']):
+        elif self.instance.role == 'Admin':
+            if any(key in data for key in ['solde_points', 'historique_achats',  'description']):
                 raise serializers.ValidationError({"non_field_errors": "Admin cannot update client or marchand-specific fields."})
         return data
 
@@ -150,14 +167,14 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
         
-        if instance.role == 'client':
+        if instance.role == 'Client':
             client = instance.client
             client.solde_points = validated_data.pop('solde_points', client.solde_points)
             client.historique_achats = validated_data.pop('historique_achats', client.historique_achats)
             client.save()
-        elif instance.role == 'marchand':
+        elif instance.role == 'Marchand':
             marchand = instance.marchand
-            marchand.boutique_nom = validated_data.pop('boutique_nom', marchand.boutique_nom)
+           
             marchand.description = validated_data.pop('description', marchand.description)
             marchand.save()
 

@@ -4,7 +4,7 @@ export interface UserSignupData {
   prenom: string;
   telephone: string;
   adresse: string;
-  role: 'client' | 'marchand' | 'admin';
+  role: 'Client' | 'Marchand' | 'Admin';
   password: string;
   confirm_password: string;
 }
@@ -19,7 +19,7 @@ export interface User {
   email: string;
   nom: string;
   prenom: string;
-  role: 'client' | 'marchand' | 'admin';
+  role: 'Client' | 'Marchand' | 'Admin';
 }
 
 export interface LoginResponse {

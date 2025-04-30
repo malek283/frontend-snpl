@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { useAuth } from '../contexts/AuthContext';
+
 import { Eye, EyeOff } from 'lucide-react';
 import { UserSignupData } from '../types';
 import { register } from '../services/authService';
@@ -12,7 +12,7 @@ interface FormState {
   email: string;
   telephone: string;
   adresse: string;
-  role: 'client' | 'marchand' | 'admin';
+  role: 'Client' | 'Marchand' | 'Admin';
   password: string;
   confirmPassword: string;
   showPassword: boolean;
@@ -26,7 +26,7 @@ const RegisterPage = () => {
     email: '',
     telephone: '',
     adresse: '',
-    role: 'client',
+    role: 'Client',
     password: '',
     confirmPassword: '',
     showPassword: false,

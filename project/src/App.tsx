@@ -19,6 +19,7 @@ import MerchantDashboard from './dashboard/pages/MerchantDashboard';
 import AdminDashboard from './admin/AdminDashboard';
 import CategoryPage from './admin/pages/CategoryPage';
 import ShopCreatorPage from './admin/pages/CategoryPage';
+import ErrorBoundary from './ErrorBoundary';
 function App() {
   return (
     
@@ -26,6 +27,7 @@ function App() {
       <CartProvider>
         <WishlistProvider>
           <Toaster position="top-center" />
+          <ErrorBoundary>
           <Routes>
 
         
@@ -63,6 +65,7 @@ function App() {
               } />
             </Route>
           </Routes>
+          </ErrorBoundary>
         </WishlistProvider>
       </CartProvider>
     </AuthProvider>

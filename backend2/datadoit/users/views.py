@@ -48,7 +48,6 @@ def login_view(request):
         'refresh_token': refresh_token
     }, status=status.HTTP_200_OK)
 
-
 @api_view(['POST'])
 @permission_classes([AllowAny])
 

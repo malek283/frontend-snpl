@@ -1,94 +1,439 @@
-import React, { useState } from 'react';
-import { MessageSquare, Search, Star } from 'lucide-react';
-import { CustomerMessage, mockCustomerMessages } from './data/mockData';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { MessageSquare, Search, Edit2, Trash2, Pin, Heart } from 'lucide-react';
+import { useAuthStore } from '../components/Store/authStore';
+
+// Define interfaces
+interface ChatMessage {
+  id: string;
+  customerId: string;
+  customerName: string;
+  senderId: string;
+  content: string;
+  date: string;
+  isFromMerchant: boolean;
+  hasEarlyPaymentReward?: boolean;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  replyTo?: string | null;
+  reactions?: { emoji: string; name: string }[];
+}
+
+interface Member {
+  id: string;
+  name: string;
+  isOnline: boolean;
+}
+
+interface Notification {
+  id: string;
+  message: string;
+  senderName: string;
+  time: string;
+  read: boolean;
+}
+
+interface User {
+  id: string;
+  role: 'client' | 'marchand' | 'admin';
+}
+
+const roleMap: Record<User['role'], 'customer' | 'merchant' | 'admin'> = {
+  client: 'customer',
+  marchand: 'merchant',
+  admin: 'admin',
+};
 
 const CustomerMessages: React.FC = () => {
-  const [messages, setMessages] = useState<CustomerMessage[]>(mockCustomerMessages);
-  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const { accessToken, user } = useAuthStore((state) => {
+    console.log('useAuthStore called:', { accessToken: state.accessToken, user: state.user });
+    return {
+      accessToken: state.accessToken,
+      user: state.user as User | null,
+    };
+  });
+  const [roomName, setRoomName] = useState<string>('');
+  const [roomType, setRoomType] = useState<'shop' | 'admin'>('shop');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredMessages = messages.filter(msg =>
-    msg.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    msg.orderId.toString().includes(searchQuery)
-  );
+  const ws = useRef<WebSocket | null>(null);
+  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const customerMessages = selectedCustomer
-    ? messages.filter(msg => msg.customerId === selectedCustomer)
-    : [];
+  // Memoize user properties
+  const userId = useMemo(() => user?.id, [user]);
+  const userRole = useMemo(() => user?.role, [user]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  // Compute roomName and roomType
+  useEffect(() => {
+    if (!userId || !userRole) {
+      setError('Utilisateur non authentifié');
+      setRoomName('');
+      setRoomType('shop');
+      return;
+    }
+
+    const serverRole = roleMap[userRole];
+    let newRoomName = '';
+    let newRoomType: 'shop' | 'admin' = 'shop';
+
+    if (serverRole === 'merchant') {
+      newRoomType = 'shop';
+      newRoomName = `shop_${userId}`;
+    } else if (serverRole === 'admin') {
+      newRoomType = 'admin';
+      newRoomName = `admin_${userId}`;
+    } else if (serverRole === 'customer') {
+      newRoomType = 'shop';
+      newRoomName = 'shop_default';
+    } else {
+      setError('Rôle utilisateur invalide');
+      return;
+    }
+
+    console.log('Room setup:', { newRoomName, newRoomType, userId, userRole });
+    setRoomName(newRoomName);
+    setRoomType(newRoomType);
+  }, [userId, userRole]);
+
+  // WebSocket connection setup
+  useEffect(() => {
+    if (!accessToken || !roomName) {
+      setError('Jeton d’authentification ou nom de salle manquant');
+      return;
+    }
+
+    console.log('WebSocket useEffect dependencies:', { roomName, accessToken, roomType, userId, userRole });
+
+    const connectWebSocket = () => {
+      console.log('Attempting WebSocket connection to:', `ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}`);
+      ws.current = new WebSocket(`ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}`);
+
+      ws.current.onopen = () => {
+        console.log('WebSocket connected for room:', roomName);
+        setError(null);
+        ws.current?.send(JSON.stringify({ type: roomType === 'shop' ? 'get_customers' : 'get_members' }));
+        ws.current?.send(JSON.stringify({ type: 'get_notifications' }));
+      };
+
+      ws.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message received:', data);
+
+        switch (data.type) {
+          case 'chat_message':
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: data.id,
+                customerId: data.customer_id || selectedCustomer || 'unknown',
+                customerName: data.sender_name || 'Inconnu',
+                senderId: data.sender_id,
+                content: data.message,
+                date: data.time,
+                isFromMerchant: userRole === 'marchand' && data.sender_id === userId,
+                hasEarlyPaymentReward: data.message.includes('EARLY10'),
+                isEdited: data.is_edited || false,
+                isDeleted: data.is_deleted || false,
+                replyTo: data.reply_to || null,
+              },
+            ]);
+            break;
+          case 'customers':
+          case 'members':
+            setMembers(data.customers || data.members || []);
+            break;
+          case 'customer_entered':
+            setNotifications((prev) => [
+              ...prev,
+              {
+                id: `enter-${data.customer_id}-${Date.now()}`,
+                message: `${data.customer_name} a rejoint votre boutique`,
+                senderName: data.customer_name,
+                time: new Date().toISOString(),
+                read: false,
+              },
+            ]);
+            setMembers((prev) => {
+              if (prev.some((m) => m.id === data.customer_id)) return prev;
+              return [...prev, { id: data.customer_id, name: data.customer_name, isOnline: true }];
+            });
+            break;
+          case 'member_status':
+            setMembers((prev) =>
+              prev.map((m) =>
+                m.id === data.user_id ? { ...m, isOnline: data.isOnline } : m
+              )
+            );
+            break;
+          case 'notification':
+            setNotifications((prev) => [
+              ...prev,
+              {
+                id: data.notification_id,
+                message: data.message,
+                senderName: data.sender_name,
+                time: data.time,
+                read: data.read,
+              },
+            ]);
+            break;
+          case 'message_edited':
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === data.message_id
+                  ? { ...msg, content: data.new_text, isEdited: true }
+                  : msg
+              )
+            );
+            break;
+          case 'message_deleted':
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === data.message_id ? { ...msg, isDeleted: true } : msg
+              )
+            );
+            break;
+          case 'message_pinned':
+            console.log('Message pinned:', data.message_id);
+            break;
+          case 'message_reaction':
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === data.message_id
+                  ? {
+                      ...msg,
+                      reactions: [
+                        ...(msg.reactions || []),
+                        { emoji: data.emoji, name: data.sender_name },
+                      ],
+                    }
+                  : msg
+              )
+            );
+            break;
+          case 'message_read':
+            console.log('Message read:', data.message_id);
+            break;
+          case 'notification_read':
+            setNotifications((prev) =>
+              prev.map((n) =>
+                n.id === data.notification_id ? { ...n, read: true } : n
+              )
+            );
+            break;
+          case 'all_notifications_read':
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+            break;
+          default:
+            console.warn('Unknown message type:', data.type);
+        }
+      };
+
+      ws.current.onclose = (event) => {
+        console.log('WebSocket closed:', { roomName, code: event.code, reason: event.reason });
+        setError(`Connexion WebSocket interrompue: ${event.reason || 'raison inconnue'}`);
+        reconnectTimeout.current = setTimeout(connectWebSocket, 5000);
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', { roomName, error });
+        setError('Une erreur WebSocket s’est produite');
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (ws.current) {
+        ws.current.close();
+        ws.current = null;
+      }
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
+    };
+  }, [roomName, accessToken, roomType, userId, userRole]);
+
+  // Handle sending a new message
+  const handleSendMessage = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedCustomer) return;
+    if (!newMessage.trim() || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
 
-    const newMsg: CustomerMessage = {
-      id: Date.now().toString(),
-      customerId: selectedCustomer,
-      customerName: customerMessages[0].customerName,
-      orderId: customerMessages[0].orderId,
-      content: newMessage,
-      date: new Date().toISOString(),
-      isFromMerchant: true,
-      hasEarlyPaymentReward: false,
-    };
-
-    setMessages([...messages, newMsg]);
+    ws.current.send(
+      JSON.stringify({
+        type: 'chat_message',
+        message: newMessage,
+        customer_id: roomType === 'shop' ? selectedCustomer : undefined,
+        reply_to: null,
+      })
+    );
     setNewMessage('');
-  };
+  }, [newMessage, roomType, selectedCustomer]);
 
-  const handleOfferReward = (customerId: string) => {
-    const rewardMessage: CustomerMessage = {
-      id: Date.now().toString(),
-      customerId,
-      customerName: customerMessages[0].customerName,
-      orderId: customerMessages[0].orderId,
-      content: "Pour vous remercier de votre paiement rapide, nous vous offrons une remise de 10% sur votre prochaine commande ! Code promo : EARLY10",
-      date: new Date().toISOString(),
-      isFromMerchant: true,
-      hasEarlyPaymentReward: true,
+  // Handle offering a reward
+  const handleOfferReward = useCallback((customerId: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || roomType !== 'shop') return;
+
+    const rewardMessage = {
+      type: 'chat_message',
+      message:
+        'Pour vous remercier de votre paiement rapide, nous vous offrons une remise de 10% sur votre prochaine commande ! Code promo : EARLY10',
+      customer_id: customerId,
+      reply_to: null,
     };
 
-    setMessages([...messages, rewardMessage]);
-  };
+    ws.current.send(JSON.stringify(rewardMessage));
+  }, [roomType]);
+
+  // Handle message actions
+  const handleEditMessage = useCallback((messageId: string, newText: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !newText) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'edit_message',
+        message_id: messageId,
+        new_text: newText,
+      })
+    );
+  }, []);
+
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'delete_message',
+        message_id: messageId,
+      })
+    );
+  }, []);
+
+  const handlePinMessage = useCallback((messageId: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'pin_message',
+        message_id: messageId,
+      })
+    );
+  }, []);
+
+  const handleReactToMessage = useCallback((messageId: string, emoji: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'react_to_message',
+        message_id: messageId,
+        emoji,
+      })
+    );
+  }, []);
+
+  const handleMarkMessageAsRead = useCallback((messageId: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'mark_as_read',
+        message_id: messageId,
+      })
+    );
+  }, []);
+
+  const handleMarkNotificationAsRead = useCallback((notificationId: string) => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'mark_notification_as_read',
+        notification_id: notificationId,
+      })
+    );
+  }, []);
+
+  const handleMarkAllNotificationsAsRead = useCallback(() => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    ws.current.send(
+      JSON.stringify({
+        type: 'mark_all_notifications_as_read',
+      })
+    );
+  }, []);
+
+  const handleCustomerSelect = useCallback((customerId: string) => {
+    console.log('Setting selectedCustomer:', { customerId, roomType });
+    setSelectedCustomer(roomType === 'shop' ? customerId : null);
+  }, [roomType]);
+
+  // Filter messages for the selected customer
+  const customerMessages = useMemo(() => {
+    return roomType === 'shop' && selectedCustomer
+      ? messages.filter((msg) => msg.customerId === selectedCustomer)
+      : messages;
+  }, [messages, roomType, selectedCustomer]);
+
+  // Filter members for search
+  const filteredMembers = useMemo(() => {
+    return members.filter(
+      (member) =>
+        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        member.id.includes(searchQuery)
+    );
+  }, [members, searchQuery]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-800">Messages Clients</h1>
-        <p className="text-gray-500">Gérez vos conversations avec les clients</p>
+        <h1 className="text-2xl font-bold text-gray-800">
+          {roomType === 'shop' ? 'Messages Clients' : 'Messages Admins'}
+        </h1>
+        <p className="text-gray-500">
+          {roomType === 'shop' ? 'Gérez vos conversations avec les clients' : 'Discussions administratives'}
+        </p>
+        {error && <p className="text-red-500">{error}</p>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Customers List */}
+        {/* Members/Customers List */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b">
             <div className="relative">
               <input
                 type="text"
-                placeholder="Rechercher un client..."
+                placeholder={roomType === 'shop' ? 'Rechercher un client...' : 'Rechercher un admin...'}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={20}
+              />
             </div>
           </div>
           <div className="divide-y max-h-[600px] overflow-y-auto">
-            {filteredMessages.map((msg) => (
+            {filteredMembers.map((member) => (
               <button
-                key={msg.id}
-                onClick={() => setSelectedCustomer(msg.customerId)}
+                key={member.id}
+                onClick={() => handleCustomerSelect(member.id)}
                 className={`w-full p-4 text-left hover:bg-gray-50 ${
-                  selectedCustomer === msg.customerId ? 'bg-blue-50' : ''
+                  selectedCustomer === member.id && roomType === 'shop' ? 'bg-blue-50' : ''
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900">{msg.customerName}</p>
-                    <p className="text-sm text-gray-500">Commande #{msg.orderId}</p>
+                    <p className="font-medium text-gray-900">{member.name}</p>
+                    <p className="text-sm text-gray-500">
+                      {member.isOnline ? 'En ligne' : 'Hors ligne'}
+                    </p>
                   </div>
-                  {msg.hasEarlyPaymentReward && (
-                    <Star className="text-yellow-400" size={20} />
+                  {notifications.some(
+                    (n) => n.senderName === member.name && !n.read
+                  ) && (
+                    <span className="h-2 w-2 bg-red-500 rounded-full"></span>
                   )}
                 </div>
               </button>
@@ -98,24 +443,30 @@ const CustomerMessages: React.FC = () => {
 
         {/* Chat Area */}
         <div className="md:col-span-2 bg-white rounded-lg shadow flex flex-col h-[600px]">
-          {selectedCustomer ? (
+          {(roomType === 'shop' && selectedCustomer) || roomType === 'admin' ? (
             <>
               <div className="p-4 border-b">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="font-medium text-gray-900">
-                      {customerMessages[0]?.customerName}
+                      {roomType === 'shop'
+                        ? members.find((m) => m.id === selectedCustomer)?.name ?? 'Client inconnu'
+                        : 'Discussion Admin'}
                     </h2>
                     <p className="text-sm text-gray-500">
-                      Commande #{customerMessages[0]?.orderId}
+                      {roomType === 'shop' && members.find((m) => m.id === selectedCustomer)?.isOnline
+                        ? 'En ligne'
+                        : 'Hors ligne'}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleOfferReward(selectedCustomer)}
-                    className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
-                  >
-                    Offrir une remise
-                  </button>
+                  {roomType === 'shop' && selectedCustomer && (
+                    <button
+                      onClick={() => handleOfferReward(selectedCustomer)}
+                      className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
+                    >
+                      Offrir une remise
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -123,24 +474,82 @@ const CustomerMessages: React.FC = () => {
                 {customerMessages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex ${msg.isFromMerchant ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${
+                      msg.isFromMerchant ? 'justify-end' : 'justify-start'
+                    }`}
+                    onClick={() => handleMarkMessageAsRead(msg.id)}
                   >
                     <div
-                      className={`max-w-xs md:max-w-md rounded-lg px-4 py-2 ${
+                      className={`relative max-w-xs md:max-w-md rounded-lg px-4 py-2 ${
                         msg.isFromMerchant
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-800'
-                      } ${msg.hasEarlyPaymentReward ? 'border-2 border-yellow-400' : ''}`}
+                      } ${
+                        msg.hasEarlyPaymentReward ? 'border-2 border-yellow-400' : ''
+                      } ${msg.isDeleted ? 'opacity-50' : ''}`}
                     >
-                      <p className="text-sm">{msg.content}</p>
-                      <p className={`text-xs mt-1 ${
-                        msg.isFromMerchant ? 'text-blue-200' : 'text-gray-500'
-                      }`}>
+                      {msg.isDeleted ? (
+                        <p className="text-sm italic">Message supprimé</p>
+                      ) : (
+                        <>
+                          <p className="text-sm">{msg.content}</p>
+                          {msg.isEdited && (
+                            <p className="text-xs italic">Modifié</p>
+                          )}
+                          {msg.reactions && msg.reactions.length > 0 && (
+                            <div className="flex space-x-2 mt-1">
+                              {msg.reactions.map((r, idx) => (
+                                <span key={idx} className="text-xs">
+                                  {r.emoji}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                      <p
+                        className={`text-xs mt-1 ${
+                          msg.isFromMerchant ? 'text-blue-200' : 'text-gray-500'
+                        }`}
+                      >
                         {new Date(msg.date).toLocaleTimeString('fr-FR', {
                           hour: '2-digit',
-                          minute: '2-digit'
+                          minute: '2-digit',
                         })}
                       </p>
+                      {!msg.isDeleted && msg.isFromMerchant && (
+                        <div className="absolute top-0 right-0 flex space-x-2 p-1">
+                          <button
+                            onClick={() =>
+                              handleEditMessage(
+                                msg.id,
+                                prompt('Nouveau texte:', msg.content) || msg.content
+                              )
+                            }
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handlePinMessage(msg.id)}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            <Pin size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleReactToMessage(msg.id, '❤️')}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            <Heart size={16} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -168,12 +577,50 @@ const CustomerMessages: React.FC = () => {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center text-gray-500">
                 <MessageSquare size={48} className="mx-auto mb-4" />
-                <p>Sélectionnez un client pour voir la conversation</p>
+                <p>{roomType === 'shop' ? 'Sélectionnez un client pour voir la conversation' : 'Aucune conversation sélectionnée'}</p>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Notifications Panel */}
+      {notifications.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-medium">Notifications</h2>
+            <button
+              onClick={handleMarkAllNotificationsAsRead}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Tout marquer comme lu
+            </button>
+          </div>
+          <div className="mt-2 space-y-2">
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                className={`p-2 rounded-lg ${n.read ? 'bg-gray-100' : 'bg-blue-50'}`}
+              >
+                <p className="text-sm">
+                  <strong>{n.senderName}</strong>: {n.message}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {new Date(n.time).toLocaleString('fr-FR')}
+                </p>
+                {!n.read && (
+                  <button
+                    onClick={() => handleMarkNotificationAsRead(n.id)}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Marquer comme lu
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
