@@ -3,16 +3,17 @@ import Button from '../components/ui/Button';
 import CategoryCard from '../components/categories/CategoryCard';
 import { Plus, Search } from 'lucide-react';
 import { categories } from '../data/mockData';
-import { Category } from '../types';
+
 import AddCategoryModal from '../components/modals/AddCategoryModal';
+import { CategoryBoutique } from '../types';
 
 const CategoriesPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoriesList, setCategoriesList] = useState<Category[]>(categories);
+  const [categoriesList, setCategoriesList] = useState<CategoryBoutique[]>(categories);
 
   const handleAddCategory = (category: { name: string; description: string }) => {
-    const newCategory: Category = {
+    const newCategory: CategoryBoutique = {
       id: `${categoriesList.length + 1}`,
       name: category.name,
       description: category.description,

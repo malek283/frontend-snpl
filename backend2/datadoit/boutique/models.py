@@ -1,3 +1,4 @@
+# boutique/models.py
 from django.db import models
 from django.core.validators import validate_email
 from django.utils.translation import gettext_lazy as _
@@ -21,7 +22,7 @@ class CategoryBoutique(models.Model):
 class Boutique(models.Model):
     nom = models.CharField(max_length=255, verbose_name=_("Nom"))
     description = models.TextField(blank=True, null=True, verbose_name=_("Description"))
-    logo = models.CharField(max_length=255, blank=True, null=True, verbose_name=_("Logo"))
+    logo = models.ImageField(upload_to='boutique_logos/', blank=True, null=True, verbose_name=_("Logo"))
     adresse = models.CharField(max_length=255, blank=True, null=True, verbose_name=_("Adresse"))
     telephone = models.CharField(max_length=255, blank=True, null=True, verbose_name=_("Téléphone"))
     email = models.EmailField(blank=True, null=True, validators=[validate_email], verbose_name=_("Email"))
@@ -34,7 +35,7 @@ class Boutique(models.Model):
         verbose_name=_("Catégorie Boutique")
     )
     marchand = models.ForeignKey(
-        'users.Marchand',  # Adapté si tu as un modèle Marchand
+        'users.Marchand',
         on_delete=models.CASCADE,
         related_name='boutiques',
         verbose_name=_("Marchand")
@@ -56,6 +57,13 @@ class CategoryProduit(models.Model):
     image = models.ImageField(upload_to='category_produit_images/', blank=True, null=True, verbose_name=_("Image"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    boutique = models.ForeignKey(
+        Boutique,
+        null=True,
+        on_delete=models.CASCADE,
+        related_name='categories_produits',  # Changed to avoid clash
+        verbose_name=_("Boutique")
+    )
 
     class Meta:
         verbose_name = _("Catégorie de Produit")
@@ -76,15 +84,16 @@ class Produit(models.Model):
     taille = models.CharField(max_length=50, blank=True, null=True, verbose_name=_("Taille"))
     category_produit = models.ForeignKey(
         CategoryProduit,
-        null=True, 
+        null=True,
         on_delete=models.CASCADE,
         related_name='produits',
         verbose_name=_("Catégorie Produit")
     )
     boutique = models.ForeignKey(
         Boutique,
+        null=True,
         on_delete=models.CASCADE,
-        related_name='produits',
+        related_name='produits',  # Kept as is
         verbose_name=_("Boutique")
     )
     created_at = models.DateTimeField(auto_now_add=True)

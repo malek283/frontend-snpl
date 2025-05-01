@@ -1,37 +1,88 @@
-import React, { useState } from 'react';
-import { Building, Edit, UploadCloud } from 'lucide-react';
-import { Merchant } from './data/mockData';
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import { getBoutiques, updateBoutique } from '../services/productproduitservice';
+import { Boutique, BoutiqueUpdatePayload } from '../types';
+import { Edit, Building, UploadCloud } from 'lucide-react'; // Added icons for first component's UI
 
-
-interface StoreManagementProps {
-  merchant: Merchant;
-}
-
-const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
-  const [isEditing, setIsEditing] = useState(false);
+const StoreManagement: React.FC = () => {
+  const [boutique, setBoutique] = useState<Boutique | null>(null);
+  const [isEditing, setIsEditing] = useState(false); // Added for toggling edit mode
   const [formData, setFormData] = useState({
-    storeName: merchant.storeName,
-    description: merchant.storeDescription,
-    category: merchant.storeCategory,
-    logo: merchant.storeLogo,
-    coverImage: merchant.storeCoverImage
+    storeName: '',
+    description: '',
+    logo: '',
+    coverImage: '',
+    category: '',
+    address: '',
+    phone: '',
+    email: '',
+    website: '',
   });
+  const [error, setError] = useState<string>('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  // Placeholder for categories (replace with actual data if available)
+  const categories = ['Fashion', 'Electronics', 'Home', 'Beauty', 'Sports'];
+
+  useEffect(() => {
+    const fetchBoutique = async () => {
+      try {
+        const boutiques = await getBoutiques();
+        if (boutiques.length > 0) {
+          const boutiqueData = boutiques[0];
+          setBoutique(boutiqueData);
+          setFormData({
+            storeName: boutiqueData.nom || '',
+            description: boutiqueData.description || '',
+            logo: typeof boutiqueData.logo === 'string' ? boutiqueData.logo : '',
+            coverImage: typeof boutiqueData.image === 'string' ? boutiqueData.image : boutiqueData.image ? URL.createObjectURL(boutiqueData.image) : '',
+            category: boutiqueData.category_boutique ? String(boutiqueData.category_boutique) : '',
+            address: boutiqueData.adresse || '',
+            phone: boutiqueData.telephone || '',
+            email: boutiqueData.email || '',
+            website: boutiqueData.website || '',
+          });
+        }
+      } catch (err) {
+        setError('Failed to fetch boutique');
+      }
+    };
+    fetchBoutique();
+  }, []);
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // Here you would update the store info in a real app
-    // For now we just toggle the editing state
-    setIsEditing(false);
+    if (!boutique) return;
+    try {
+      const payload: BoutiqueUpdatePayload = {
+        nom: formData.storeName,
+        description: formData.description,
+        logo: formData.logo,
+        image: formData.coverImage ? new File([formData.coverImage], "coverImage.jpg", { type: "image/jpeg" }) : null,
+        category_boutique: formData.category,
+        adresse: formData.address,
+        telephone: formData.phone,
+        email: formData.email,
+        website: formData.website,
+      };
+      const updatedBoutique = await updateBoutique(boutique.id, payload);
+      setBoutique(updatedBoutique);
+      setIsEditing(false); // Exit edit mode after save
+      setError('');
+    } catch (err) {
+      setError('Failed to update boutique');
+    }
   };
 
-  const categories = [
-    'Fashion', 'Beauty', 'Electronics', 'Home', 'Sports', 'Food', 'Art', 'Books', 'Health'
-  ];
+  if (!boutique) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -57,18 +108,18 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
             {/* Store Cover Image */}
             <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative">
               {formData.coverImage && (
-                <img 
-                  src={formData.coverImage} 
-                  alt="Store Cover" 
+                <img
+                  src={formData.coverImage}
+                  alt="Store Cover"
                   className="h-full w-full object-cover absolute inset-0"
                 />
               )}
               <div className="absolute bottom-4 left-6 flex items-center">
                 <div className="h-16 w-16 rounded-lg bg-white p-1 mr-4 shadow-lg">
                   {formData.logo ? (
-                    <img 
-                      src={formData.logo} 
-                      alt="Store Logo" 
+                    <img
+                      src={formData.logo}
+                      alt="Store Logo"
                       className="h-full w-full object-cover rounded"
                     />
                   ) : (
@@ -87,16 +138,16 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                 </div>
               </div>
             </div>
-            
+
             {/* Store Details */}
             <div className="p-6">
               <div className="mb-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Description</h3>
                 <p className="text-gray-600">
-                  {formData.description || "Aucune description disponible."}
+                  {formData.description || 'Aucune description disponible.'}
                 </p>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Statistiques de la Boutique</h3>
@@ -137,26 +188,26 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Informations de Contact</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between border-b pb-2">
                       <span className="text-gray-600">Email</span>
-                      <span className="font-medium">{merchant.email}</span>
+                      <span className="font-medium">{formData.email}</span>
                     </div>
                     <div className="flex justify-between border-b pb-2">
                       <span className="text-gray-600">Téléphone</span>
-                      <span className="font-medium">{merchant.phone || 'Non renseigné'}</span>
+                      <span className="font-medium">{formData.phone || 'Non renseigné'}</span>
                     </div>
                     <div className="flex justify-between border-b pb-2">
                       <span className="text-gray-600">Adresse</span>
-                      <span className="font-medium">{merchant.address || 'Non renseignée'}</span>
+                      <span className="font-medium">{formData.address || 'Non renseignée'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Site web</span>
                       <span className="font-medium text-blue-600">
-                        {merchant.website || 'Non renseigné'}
+                        {formData.website || 'Non renseigné'}
                       </span>
                     </div>
                   </div>
@@ -166,6 +217,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {error && <p className="text-red-500">{error}</p>}
             <div className="space-y-4">
               <div>
                 <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -176,12 +228,12 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                   id="storeName"
                   name="storeName"
                   value={formData.storeName}
-                  onChange={handleChange}
+                  onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
                   Description
@@ -191,11 +243,11 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                   name="description"
                   rows={4}
                   value={formData.description}
-                  onChange={handleChange}
+                  onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
                   Catégorie
@@ -204,7 +256,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                   id="category"
                   name="category"
                   value={formData.category}
-                  onChange={handleChange}
+                  onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Sélectionnez une catégorie</option>
@@ -215,7 +267,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                   ))}
                 </select>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
@@ -227,7 +279,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                       id="logo"
                       name="logo"
                       value={formData.logo}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 mb-2"
                       placeholder="URL de l'image"
                     />
@@ -237,7 +289,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div>
                   <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700 mb-1">
                     Image de couverture
@@ -248,7 +300,7 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                       id="coverImage"
                       name="coverImage"
                       value={formData.coverImage}
-                      onChange={handleChange}
+                      onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 mb-2"
                       placeholder="URL de l'image"
                     />
@@ -259,8 +311,64 @@ const StoreManagement: React.FC<StoreManagementProps> = ({ merchant }) => {
                   </div>
                 </div>
               </div>
+
+              <div>
+                <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                  Adresse
+                </label>
+                <input
+                  type="text"
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Téléphone
+                </label>
+                <input
+                  type="text"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-1">
+                  Site web
+                </label>
+                <input
+                  type="text"
+                  id="website"
+                  name="website"
+                  value={formData.website}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
-            
+
             <div className="flex justify-end space-x-3 pt-4 border-t">
               <button
                 type="button"

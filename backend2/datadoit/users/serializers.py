@@ -1,13 +1,19 @@
 from rest_framework import serializers
 from boutique.models import Boutique
-from users.models import User, Client, Marchand
+from users.models import Admin, User, Client, Marchand
 from django.contrib.auth import authenticate
+from django.db import IntegrityError, transaction
 
-from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
 
+
 User = get_user_model()
+
+
+
+
+
 
 class UserSerializer(serializers.ModelSerializer):
     solde_points = serializers.IntegerField(source='client.solde_points', read_only=True, required=False)
@@ -30,9 +36,10 @@ class UserSerializer(serializers.ModelSerializer):
    
 
     def get_has_boutique(self, obj):
-        if obj.role == 'marchand':
-            return Boutique.objects.filter(marchand=obj).exists()
+        if obj.role == 'marchand' and hasattr(obj, 'marchand_profile'):
+           return Boutique.objects.filter(marchand=obj.marchand_profile).exists()
         return False
+
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -40,7 +47,6 @@ class UserSerializer(serializers.ModelSerializer):
             representation.pop('solde_points', None)
             representation.pop('historique_achats', None)
         if instance.role != 'marchand':
-            representation.pop('description', None)
             representation.pop('has_boutique', None)
         return representation
 
@@ -53,84 +59,97 @@ class LoginSerializer(serializers.Serializer):
         if user and user.is_active:
             return {'user': user}
         raise serializers.ValidationError('Invalid credentials')
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from .models import Client, Marchand, Admin
+import logging
 
+logger = logging.getLogger(__name__)
+User = get_user_model()
+
+class ClientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Client
+        fields = ['solde_points', 'historique_achats']
+        extra_kwargs = {
+            'solde_points': {'default': 0, 'allow_null': True, 'required': False},
+            'historique_achats': {'allow_blank': True, 'allow_null': True, 'required': False}
+        }
+
+class MarchandSerializer(serializers.ModelSerializer):
+    is_marchant = serializers.BooleanField(default=True, write_only=True)
+    
+    class Meta:
+        model = Marchand
+        fields = ['is_marchant']
+        extra_kwargs = {
+            'is_marchant': {'required': False}
+        }
+
+class AdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Admin
+        fields = []
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
-    solde_points = serializers.IntegerField(default=0, allow_null=True, required=False)
-    historique_achats = serializers.CharField(allow_blank=True, allow_null=True, required=False)
-   
-    description = serializers.CharField(default='', allow_blank=True, required=False)
-
+    
     class Meta:
         model = User
         fields = [
-            'email', 'nom', 'prenom', 'telephone', 'role',
-            'password', 'confirm_password',
-            'solde_points', 'historique_achats',  'description'
+            'email', 'nom', 'prenom', 'telephone', 'adresse', 'role',
+            'password', 'confirm_password'
         ]
+        extra_kwargs = {
+            'role': {'default': 'client'},
+            'adresse': {'required': False, 'allow_null': True}
+        }
 
     def validate(self, data):
         if data['password'] != data['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-
-        valid_roles = [choice[0] for choice in User.ROLE_CHOICES]
-        if data['role'] not in valid_roles:
-            raise serializers.ValidationError({"role": f"Role must be one of {valid_roles}."})
-
-        if User.objects.filter(email=data['email']).exists():
-            raise serializers.ValidationError({"email": "A user with this email already exists."})
-
-        # Ensure role-specific fields are only provided for the correct role
-        if data['role'] == 'marchand':
-            # Allow solde_points and historique_achats, disallow marchand fields
-            if any(key in data for key in [ 'description']):
-                if  data.get('description'):  # Check if non-empty
-                    raise serializers.ValidationError({"non_field_errors": "Client cannot have marchand-specific fields."})
-        elif data['role'] == ' client':
-            # Allow entreprise_nom and description, disallow client fields
-            if any(key in data for key in ['solde_points', 'historique_achats']):
-                if data.get('solde_points') is not None or data.get('historique_achats'):
-                    raise serializers.ValidationError({"non_field_errors": "Marchand cannot have client-specific fields."})
-        elif data['role'] == 'admin':
-            # Disallow all role-specific fields
-            if any(key in data for key in ['solde_points', 'historique_achats',  'description']):
-                if any(data.get(key) for key in ['solde_points', 'historique_achats',  'description']):
-                    raise serializers.ValidationError({"non_field_errors": "Admin cannot have client or marchand-specific fields."})
-
+            raise serializers.ValidationError({"confirm_password": "Les mots de passe ne correspondent pas."})
+        
+        if User.objects.filter(email=data['email'].lower()).exists():
+            raise serializers.ValidationError({"email": "Cet email est déjà utilisé."})
+        
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
-        validated_data.pop('confirm_password')
-        role = validated_data.pop('role')
-        
-        if role == 'Client':
-            solde_points = validated_data.pop('solde_points', 0)
-            historique_achats = validated_data.pop('historique_achats', None)
-         
-            validated_data.pop('description', None)
-            user = Client.objects.create_user(**validated_data, role=role)
-            user.solde_points = solde_points
-            user.historique_achats = historique_achats
-            user.save()
-        elif role == 'Marchand':
-     
-            description = validated_data.pop('description', '')
-            validated_data.pop('solde_points', None)  # Remove client fields
-            validated_data.pop('historique_achats', None)
-            user = Marchand.objects.create_user(**validated_data, role=role)
-        
-            user.description = description
-            user.save()
-        else:  # admin
-            validated_data.pop('solde_points', None)
-            validated_data.pop('historique_achats', None)
-       
-            validated_data.pop('description', None)
-            user = User.objects.create_user(**validated_data, role=role)
-        
-        return user
-
+        try:
+            # Extraction et normalisation des données
+            role = validated_data.pop('role', 'client')
+            validated_data.pop('confirm_password')
+            validated_data['email'] = validated_data['email'].lower()
+            
+            # FORCE le rôle dans les données de création
+            validated_data['role'] = role
+            
+            # Création de l'utilisateur
+            user = User.objects.create_user(**validated_data)
+            
+            # Création du profil spécifique
+            if role == 'client':
+                Client.objects.create(user=user)
+            elif role == 'marchand':
+                Marchand.objects.create(user=user)
+            elif role == 'admin':
+                Admin.objects.create(user=user)
+            
+            # Recharge l'utilisateur pour s'assurer d'avoir les dernières données
+            user.refresh_from_db()
+            return user
+            
+        except IntegrityError as e:
+            logger.error(f"IntegrityError: {str(e)}")
+            raise serializers.ValidationError({
+                'error': 'Erreur lors de la création du compte.'
+            })
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+            raise serializers.ValidationError({
+                'error': 'Une erreur inattendue est survenue.'
+            })
 class UserUpdateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=False)
     password = serializers.CharField(write_only=True, required=False, min_length=8)

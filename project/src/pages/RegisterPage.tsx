@@ -14,7 +14,7 @@ interface FormState {
   adresse: string;
   role: 'Client' | 'Marchand' | 'Admin';
   password: string;
-  confirmPassword: string;
+  confirm_password: string;
   showPassword: boolean;
   showConfirmPassword: boolean;
 }
@@ -28,7 +28,7 @@ const RegisterPage = () => {
     adresse: '',
     role: 'Client',
     password: '',
-    confirmPassword: '',
+    confirm_password: '',
     showPassword: false,
     showConfirmPassword: false,
   });
@@ -58,15 +58,15 @@ const RegisterPage = () => {
       adresse,
       role,
       password,
-      confirmPassword,
+      confirm_password,
     } = formState;
 
-    if (!nom || !prenom || !email || !telephone || !adresse || !password || !confirmPassword) {
+    if (!nom || !prenom || !email || !telephone || !adresse || !password || !confirm_password) {
       toast.error('Veuillez remplir tous les champs');
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (password !== confirm_password) {
       toast.error('Les mots de passe ne correspondent pas');
       return;
     }
@@ -84,7 +84,7 @@ const RegisterPage = () => {
       adresse,
       role,
       password,
-      confirm_password: confirmPassword,
+      confirm_password,
     };
 
     try {
@@ -239,15 +239,15 @@ const RegisterPage = () => {
               </div>
 
               <div className="mb-6">
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="confirm_password" className="block text-sm font-medium text-gray-700 mb-1">
                   Confirmer le mot de passe
                 </label>
                 <div className="relative">
                   <input
-                    id="confirmPassword"
-                    name="confirmPassword"
+                    id="confirm_password"
+                    name="confirm_password"
                     type={formState.showConfirmPassword ? 'text' : 'password'}
-                    value={formState.confirmPassword}
+                    value={formState.confirm_password}
                     onChange={handleInputChange}
                     className="input pr-10"
                     placeholder="••••••••"

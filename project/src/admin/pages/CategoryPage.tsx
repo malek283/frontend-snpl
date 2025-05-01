@@ -162,9 +162,10 @@ const ShopCreatorPage = () => {
     adresse: '',
     telephone: '',
     email: '',
-    logo: '',
+   
   });
   const [image, setImage] = useState<File | null>(null);
+  const [logo, setLogo] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -198,7 +199,7 @@ const ShopCreatorPage = () => {
       adresse: '',
       telephone: '',
       email: '',
-      logo: '',
+     
     });
     setImage(null);
     setError(null);
@@ -222,15 +223,17 @@ const ShopCreatorPage = () => {
       setFieldErrors((prev) => ({ ...prev, image: '' }));
     }
   };
-
-  const isValidUrl = (url: string) => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
+  const handleFileChangeLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { files } = e.target;
+    if (files && files[0]) {
+      setLogo(files[0]);
+      setFieldErrors((prev) => ({ ...prev, logo: '' }));
     }
   };
+  
+  
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,17 +241,14 @@ const ShopCreatorPage = () => {
       setError('Please select a category and ensure you are logged in.');
       return;
     }
-
+  
     // Validate logo URL
-    if (shopData.logo && !isValidUrl(shopData.logo)) {
-      setFieldErrors((prev) => ({ ...prev, logo: 'Please enter a valid URL for the logo.' }));
-      return;
-    }
-
+  
+  
     setLoading(true);
     setError(null);
     setFieldErrors({});
-
+  
     try {
       const formData = new FormData();
       formData.append('nom', shopData.nom);
@@ -256,11 +256,17 @@ const ShopCreatorPage = () => {
       if (shopData.adresse) formData.append('adresse', shopData.adresse);
       if (shopData.telephone) formData.append('telephone', shopData.telephone);
       if (shopData.email) formData.append('email', shopData.email);
-      if (shopData.logo.trim()) formData.append('logo', shopData.logo.trim());
-      formData.append('category_boutique_id', selectedCategory.id!.toString());
+      
+      formData.append('category_boutique', selectedCategory.id!.toString());
       formData.append('marchand', user.id.toString());
-      if (image) formData.append('image', image);
-
+  
+      if (logo instanceof File) {
+        formData.append('logo', logo);  // Assurer que l'objet 'image' est bien un fichier
+      }
+      if (image instanceof File) {
+        formData.append('image', image);  // Assurer que l'objet 'image' est bien un fichier
+      }
+  
       // Log FormData for debugging
       console.log('Submitting boutique with the following data:');
       console.log('User ID:', user.id);
@@ -268,7 +274,7 @@ const ShopCreatorPage = () => {
       for (const [key, value] of formData.entries()) {
         console.log(`${key}: ${value}`);
       }
-
+  
       await createBoutique(formData);
       toast.success('boutique added successfully!');
       handleCloseDialog();
@@ -290,6 +296,7 @@ const ShopCreatorPage = () => {
       setLoading(false);
     }
   };
+  
 
   return (
     <Container>
@@ -402,14 +409,14 @@ const ShopCreatorPage = () => {
                 </FormGroup>
 
                 <FormGroup>
-                  <Label htmlFor="logo">Logo (URL)</Label>
+                  <Label htmlFor="logo">Logo </Label>
                   <Input
-                    type="text"
+                    type="file"
                     id="logo"
                     name="logo"
-                    value={shopData.logo}
-                    onChange={handleInputChange}
-                    placeholder="URL du logo de la boutique"
+                   accept="logo/*"
+                    onChange={handleFileChangeLogo}
+                   
                   />
                   {fieldErrors.logo && <ErrorMessage>{fieldErrors.logo}</ErrorMessage>}
                 </FormGroup>

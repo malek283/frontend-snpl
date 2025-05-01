@@ -1,510 +1,424 @@
-import React, { useState } from 'react';
-import { Plus, Search, Filter, Edit, Trash2, ChevronDown, ChevronUp, X, List, Grid } from 'lucide-react';
 
-interface Category {
-  id: string;
-  name: string;
-  description?: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  stock: number;
-  categoryId: string;
-  image?: string;
-}
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import {
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, InputLabel, FormControl,
+  Typography, Box, Alert, SelectChangeEvent, Card, CardContent, CardMedia, CardActions, Grid, IconButton
+} from '@mui/material';
+import { Add, Edit, Delete, Save, Cancel } from '@mui/icons-material';
+import {
+  getCategoryProduits, getProduits, updateProduit, createProduit, updateCategoryProduit,
+  createCategoryProduit, deleteProduit, deleteCategoryProduit,
+  getBoutiques
+} from '../services/productproduitservice';
+import { CategoryProduit, CategoryProduitCreatePayload, Produit, ProduitCreatePayload, Boutique } from '../types';
 
 const ProductManagement: React.FC = () => {
-  // États initiaux
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [activeTab, setActiveTab] = useState<'categories' | 'products'>('categories');
-  
-  // États pour les modales
-  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
-  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  
-  // États pour la sélection et le filtrage
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  // State for products, categories, and boutiques
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [categories, setCategories] = useState<CategoryProduit[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [boutiqueId, setBoutiqueId] = useState<string>('');
 
-  // Fonctions pour les catégories
-  const handleAddCategory = (newCategory: Omit<Category, 'id'>) => {
-    setCategories([...categories, { ...newCategory, id: Date.now().toString() }]);
-    setIsAddCategoryModalOpen(false);
-  };
+  // State for forms
+  const [productForm, setProductForm] = useState<ProduitCreatePayload>({
+    nom: '', description: '', prix: '', stock: '', couleur: '', taille: '', image: null, category_produit: '', boutique: '',
+  });
+  const [categoryForm, setCategoryForm] = useState<CategoryProduitCreatePayload>({ nom: '', image: null, boutique: '' });
 
-  // Fonctions pour les produits
-  const handleAddProduct = (newProduct: Omit<Product, 'id'>) => {
-    setProducts([...products, { ...newProduct, id: Date.now().toString() }]);
-    setIsAddProductModalOpen(false);
-  };
+  // State for editing and dialogs
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [error, setError] = useState<string>('');
+  const [openProductDialog, setOpenProductDialog] = useState(false);
+  const [openCategoryDialog, setOpenCategoryDialog] = useState(false);
 
-  const handleEditProduct = (updatedProduct: Product) => {
-    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    setIsEditModalOpen(false);
-  };
+  // Fetch boutiques and categories on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch boutiques
+        const boutiquesData = await getBoutiques();
+        console.log('Boutiques API response:', boutiquesData);
+        if (boutiquesData.length === 0) {
+          setError('No boutiques found. Please create a boutique first.');
+          return;
+        }
 
-  const handleDeleteProduct = () => {
-    if (selectedProduct) {
-      setProducts(products.filter(p => p.id !== selectedProduct.id));
-      setIsDeleteModalOpen(false);
-    }
-  };
+        // Use the first boutique's ID (extend for multiple boutiques if needed)
+        const boutiqueIdFromBoutiques = boutiquesData[0].id.toString();
+        setBoutiqueId(boutiqueIdFromBoutiques);
 
-  // Filtrage et tri des produits
-  const filteredProducts = products
-    .filter(product => 
-      (selectedCategory === 'all' || product.categoryId === selectedCategory) &&
-      (product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-       product.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    )
-    .sort((a, b) => {
-      if (sortOrder === 'asc') {
-        return a[sortBy] > b[sortBy] ? 1 : -1;
-      } else {
-        return a[sortBy] < b[sortBy] ? 1 : -1;
+        // Update forms with boutique ID
+        setProductForm((prev) => ({ ...prev, boutique: boutiqueIdFromBoutiques }));
+        setCategoryForm((prev) => ({ ...prev, boutique: boutiqueIdFromBoutiques }));
+
+        // Fetch categories
+        const categoriesData = await getCategoryProduits();
+        console.log('Categories API response:', categoriesData);
+        setCategories(categoriesData);
+      } catch (err) {
+        setError('Failed to fetch boutiques or categories. Please try again.');
+        console.error('Fetch error:', err);
       }
-    });
+    };
+    fetchData();
+  }, []);
 
-  const handleSort = (column: 'name' | 'price' | 'stock') => {
-    if (sortBy === column) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(column);
-      setSortOrder('asc');
+  // Fetch products when selectedCategory changes
+  useEffect(() => {
+    const fetchProduits = async () => {
+      try {
+        const produitsData = await getProduits(selectedCategory || undefined);
+        console.log('Products API response:', produitsData);
+        setProduits(produitsData);
+      } catch (err) {
+        setError('Failed to fetch products. Please try again.');
+        console.error('Fetch error:', err);
+      }
+    };
+    fetchProduits();
+  }, [selectedCategory]);
+
+  // Handle product form input changes
+  const handleProductFormChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> | SelectChangeEvent<string>
+  ) => {
+    const { name, value } = e.target as HTMLInputElement | { name: string; value: string };
+    const files = (e.target as HTMLInputElement).files;
+    setProductForm((prev) => ({
+      ...prev,
+      [name]: files ? files[0] : value,
+    }));
+  };
+
+  // Handle category form input changes
+  const handleCategoryFormChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value, files } = e.target;
+    setCategoryForm((prev) => ({ ...prev, [name]: files ? files[0] : value }));
+  };
+
+  // Handle product form submission
+  const handleProductSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!productForm.boutique) {
+      setError('Boutique ID is required. Please ensure a valid boutique is configured.');
+      return;
+    }
+    try {
+      if (editingProductId) {
+        const updatedProduit = await updateProduit(editingProductId, productForm);
+        setProduits(produits.map((p) => (p.id === editingProductId ? updatedProduit : p)));
+        setEditingProductId(null);
+      } else {
+        const newProduit = await createProduit({ ...productForm, category_produit: selectedCategory });
+        setProduits([...produits, newProduit]);
+      }
+      setProductForm({
+        nom: '', description: '', prix: '', stock: '', couleur: '', taille: '', image: null,
+        category_produit: '', boutique: boutiqueId,
+      });
+      setOpenProductDialog(false);
+    } catch (err) {
+      setError('Failed to save product. Please check your input and try again.');
+      console.error('Product submit error:', err);
     }
   };
 
-  // Composant pour le formulaire de catégorie
-  const CategoryFormModal = () => (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Ajouter une Catégorie</h3>
-          <button onClick={() => setIsAddCategoryModalOpen(false)} className="text-gray-500 hover:text-gray-700">
-            <X size={24} />
-          </button>
-        </div>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const name = (form.elements.namedItem('name') as HTMLInputElement).value;
-          const description = (form.elements.namedItem('description') as HTMLInputElement).value;
-          handleAddCategory({ name, description });
-        }}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-              <input 
-                name="name" 
-                type="text" 
-                required 
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea 
-                name="description" 
-                rows={3} 
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setIsAddCategoryModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Enregistrer
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+  // Handle category form submission
+  const handleCategorySubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!categoryForm.boutique) {
+      setError('Boutique ID is required. Please ensure a valid boutique is configured.');
+      return;
+    }
+    try {
+      if (editingCategoryId) {
+        const updatedCategory = await updateCategoryProduit(editingCategoryId, {
+          ...categoryForm,
+          boutique: categoryForm.boutique.toString(),
+        });
+        setCategories(categories.map((c) => (c.id === editingCategoryId ? updatedCategory : c)));
+        setEditingCategoryId(null);
+      } else {
+        console.log('Submitting category payload:', categoryForm);
+        const newCategory = await createCategoryProduit(categoryForm);
+        console.log('Category creation response:', newCategory);
+        setCategories([...categories, newCategory]);
+      }
+      setCategoryForm({ nom: '', image: null, boutique: boutiqueId });
+      setOpenCategoryDialog(false);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.non_field_errors?.[0] || 'Failed to save category. Please check your input and try again.';
+      setError(errorMessage);
+      console.error('Category submit error:', err.response?.data || err);
+    }
+  };
 
-  // Composant pour le formulaire de produit
-  const ProductFormModal = ({ isEdit = false }: { isEdit?: boolean }) => (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">{isEdit ? 'Modifier' : 'Ajouter'} un Produit</h3>
-          <button onClick={() => isEdit ? setIsEditModalOpen(false) : setIsAddProductModalOpen(false)} className="text-gray-500 hover:text-gray-700">
-            <X size={24} />
-          </button>
-        </div>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const newProduct = {
-            name: (form.elements.namedItem('name') as HTMLInputElement).value,
-            description: (form.elements.namedItem('description') as HTMLInputElement).value,
-            price: parseFloat((form.elements.namedItem('price') as HTMLInputElement).value),
-            stock: parseInt((form.elements.namedItem('stock') as HTMLInputElement).value),
-            categoryId: (form.elements.namedItem('categoryId') as HTMLSelectElement).value,
-            image: (form.elements.namedItem('image') as HTMLInputElement).value
-          };
-          
-          if (isEdit && selectedProduct) {
-            handleEditProduct({ ...newProduct, id: selectedProduct.id });
-          } else {
-            handleAddProduct(newProduct);
-          }
-        }}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-              <input 
-                name="name" 
-                type="text" 
-                required 
-                defaultValue={isEdit ? selectedProduct?.name : ''}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea 
-                name="description" 
-                rows={3} 
-                defaultValue={isEdit ? selectedProduct?.description : ''}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie *</label>
-              <select
-                name="categoryId"
-                required
-                defaultValue={isEdit ? selectedProduct?.categoryId : ''}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              >
-                <option value="">Sélectionner une catégorie</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prix *</label>
-                <input 
-                  name="price" 
-                  type="number" 
-                  step="0.01" 
-                  required 
-                  defaultValue={isEdit ? selectedProduct?.price : ''}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stock *</label>
-                <input 
-                  name="stock" 
-                  type="number" 
-                  required 
-                  defaultValue={isEdit ? selectedProduct?.stock : ''}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-              <input 
-                name="image" 
-                type="text" 
-                defaultValue={isEdit ? selectedProduct?.image : ''}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={() => isEdit ? setIsEditModalOpen(false) : setIsAddProductModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                {isEdit ? 'Modifier' : 'Ajouter'}
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+  // Handle product edit
+  const handleEditProduct = (produit: Produit) => {
+    setEditingProductId(produit.id);
+    setProductForm({
+      nom: produit.nom, description: produit.description || '', prix: produit.prix, stock: produit.stock.toString(),
+      couleur: produit.couleur || '', taille: produit.taille || '', image: null,
+      category_produit: produit.category_produit.toString(), boutique: produit.boutique.toString(),
+    });
+    setOpenProductDialog(true);
+  };
+
+  // Handle category edit
+  const handleEditCategory = (category: CategoryProduit) => {
+    setEditingCategoryId(category.id);
+    setCategoryForm({ nom: category.nom, image: null, boutique: category.boutique.toString() });
+    setOpenCategoryDialog(true);
+  };
+
+  // Handle product deletion
+  const handleDeleteProduct = async (id: number) => {
+    try {
+      await deleteProduit(id);
+      setProduits(produits.filter((p) => p.id !== id));
+    } catch (err) {
+      setError('Failed to delete product. Please try again.');
+      console.error('Delete product error:', err);
+    }
+  };
+
+  // Handle category deletion
+  const handleDeleteCategory = async (id: number) => {
+    try {
+      await deleteCategoryProduit(id);
+      setCategories(categories.filter((c) => c.id !== id));
+    } catch (err) {
+      setError('Failed to delete category. Please try again.');
+      console.error('Delete category error:', err);
+    }
+  };
+
+  // Helper to get image URL with console logs
+  const getImageUrl = (
+    image: string | File | null,
+    context: 'Product' | 'Category',
+    itemName: string
+  ) => {
+    console.log(`[${context}] Image for ${itemName}:`, image);
+    if (typeof image === 'string' && image) {
+      const isFullUrl = image.startsWith('http://') || image.startsWith('https://');
+      console.log(`[${context}] Image is a string, full URL: ${isFullUrl}, URL: ${image}`);
+      return image; // Server returned a URL
+    }
+    if (image instanceof File) {
+      const objectUrl = URL.createObjectURL(image);
+      console.log(`[${context}] Image is a File, created Object URL: ${objectUrl}`);
+      return objectUrl; // Create object URL for File
+    }
+    console.log(`[${context}] No image provided for ${itemName}, returning null`);
+    return null; // No image
+  };
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Gestion des Produits</h1>
-      
-      {/* Onglets */}
-      <div className="flex border-b mb-6">
-        <button
-          className={`py-2 px-4 font-medium ${activeTab === 'categories' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
-          onClick={() => setActiveTab('categories')}
-        >
-          Catégories
-        </button>
-        <button
-          className={`py-2 px-4 font-medium ${activeTab === 'products' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
-          onClick={() => {
-            if (categories.length === 0) {
-              alert('Veuillez créer au moins une catégorie avant de gérer les produits');
-            } else {
-              setActiveTab('products');
-            }
-          }}
-          disabled={categories.length === 0}
-        >
-          Produits
-        </button>
-      </div>
-      
-      {/* Contenu des onglets */}
-      {activeTab === 'categories' ? (
-        <div>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Liste des Catégories</h2>
-            <button
-              onClick={() => setIsAddCategoryModalOpen(true)}
-              className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
-              <Plus size={18} className="mr-2" />
-              Ajouter une Catégorie
-            </button>
-          </div>
-          
-          {categories.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <p className="text-gray-500 mb-4">Aucune catégorie créée</p>
-              <button
-                onClick={() => setIsAddCategoryModalOpen(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                Créer votre première catégorie
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nom</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre de produits</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {categories.map(category => (
-                    <tr key={category.id}>
-                      <td className="px-6 py-4 whitespace-nowrap font-medium">{category.name}</td>
-                      <td className="px-6 py-4 text-gray-500">{category.description || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {products.filter(p => p.categoryId === category.id).length} produits
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+    <Box p={4}>
+      <Typography variant="h4" fontWeight="bold" mb={4}>Product Management</Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {/* Category Section */}
+      <Box mb={8}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h5" fontWeight="medium">Categories</Typography>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setOpenCategoryDialog(true)}
+          >
+            Add Category
+          </Button>
+        </Box>
+
+        {/* Category Dialog */}
+        <Dialog open={openCategoryDialog} onClose={() => setOpenCategoryDialog(false)}>
+          <DialogTitle>{editingCategoryId ? 'Edit Category' : 'Add Category'}</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth margin="dense" label="Category Name" name="nom" value={categoryForm.nom}
+              onChange={handleCategoryFormChange} required
+            />
+            <TextField
+              fullWidth margin="dense" type="file" name="image" onChange={handleCategoryFormChange}
+              InputLabelProps={{ shrink: true }} label="Image"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenCategoryDialog(false)} startIcon={<Cancel />}>Cancel</Button>
+            <Button onClick={handleCategorySubmit} variant="contained" startIcon={<Save />}>
+              {editingCategoryId ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Category Cards */}
+        <Grid container spacing={3}>
+          {categories.length === 0 && (
+            <Grid item xs={12}>
+              <Typography>No categories found.</Typography>
+            </Grid>
           )}
-        </div>
-      ) : (
-        <div>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Liste des Produits</h2>
-            <button
-              onClick={() => setIsAddProductModalOpen(true)}
-              className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
-              <Plus size={18} className="mr-2" />
-              Ajouter un Produit
-            </button>
-          </div>
-          
-          {/* Filtres */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="relative flex-grow">
-              <input
-                type="text"
-                placeholder="Rechercher un produit..."
-                className="w-full py-2 pl-10 pr-4 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            </div>
-            <select
-              className="px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-            >
-              <option value="all">Toutes catégories</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Tableau des produits */}
-          {filteredProducts.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <p className="text-gray-500 mb-4">Aucun produit trouvé</p>
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                }}
-                className="text-blue-600 hover:text-blue-800 mr-4"
+          {categories.map((category) => (
+            <Grid item xs={12} sm={6} md={4} key={category.id}>
+              <Card sx={{ boxShadow: 3, borderRadius: 2, overflow: 'hidden' }}>
+                <CardMedia
+                  component="img"
+                  height="140"
+                  image={getImageUrl(category.image, 'Category', category.nom) || 'https://via.placeholder.com/140'}
+                  alt={category.nom}
+                  sx={{ objectFit: 'cover' }}
+                  onError={() => console.error(`[Category] Failed to load image for ${category.nom}`)}
+                />
+                <CardContent>
+                  <Typography variant="h6" fontWeight="bold">{category.nom}</Typography>
+                  {!category.image && (
+                    <Typography variant="body2" color="text.secondary">
+                      No image available
+                    </Typography>
+                  )}
+                </CardContent>
+                <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
+                  <IconButton onClick={() => handleEditCategory(category)}><Edit /></IconButton>
+                  <IconButton onClick={() => handleDeleteCategory(category.id)}><Delete /></IconButton>
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+
+      {/* Category Filter */}
+      <Box mb={4}>
+        <FormControl fullWidth>
+          <InputLabel>Filter by Category</InputLabel>
+          <Select
+            value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} label="Filter by Category"
+          >
+            <MenuItem value="">All Categories</MenuItem>
+            {categories.map((category) => (
+              <MenuItem key={category.id} value={category.id.toString()}>{category.nom}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+
+      {/* Product Section */}
+      <Box mb={8}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h5" fontWeight="medium">Products</Typography>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setOpenProductDialog(true)}
+          >
+            Add Product
+          </Button>
+        </Box>
+
+        {/* Product Dialog */}
+        <Dialog open={openProductDialog} onClose={() => setOpenProductDialog(false)}>
+          <DialogTitle>{editingProductId ? 'Edit Product' : 'Add Product'}</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth margin="dense" label="Product Name" name="nom" value={productForm.nom}
+              onChange={handleProductFormChange} required
+            />
+            <TextField
+              fullWidth margin="dense" label="Description" name="description" value={productForm.description}
+              onChange={handleProductFormChange} multiline rows={3}
+            />
+            <TextField
+              fullWidth margin="dense" label="Price" name="prix" type="number" value={productForm.prix}
+              onChange={handleProductFormChange} required
+            />
+            <TextField
+              fullWidth margin="dense" label="Stock" name="stock" type="number" value={productForm.stock}
+              onChange={handleProductFormChange} required
+            />
+            <TextField
+              fullWidth margin="dense" label="Color" name="couleur" value={productForm.couleur}
+              onChange={handleProductFormChange}
+            />
+            <TextField
+              fullWidth margin="dense" label="Size" name="taille" value={productForm.taille}
+              onChange={handleProductFormChange}
+            />
+            <FormControl fullWidth margin="dense">
+              <InputLabel>Category</InputLabel>
+              <Select
+                name="category_produit"
+                value={productForm.category_produit}
+                onChange={(e: SelectChangeEvent<string>) => handleProductFormChange(e)}
+                label="Category"
+                required
               >
-                Réinitialiser les filtres
-              </button>
-              <button
-                onClick={() => setIsAddProductModalOpen(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                Ajouter un produit
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nom</th>
-                    <th 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort('price')}
-                    >
-                      <div className="flex items-center">
-                        Prix
-                        {sortBy === 'price' && (
-                          <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort('stock')}
-                    >
-                      <div className="flex items-center">
-                        Stock
-                        {sortBy === 'stock' && (
-                          <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catégorie</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredProducts.map(product => {
-                    const category = categories.find(c => c.id === product.categoryId);
-                    return (
-                      <tr key={product.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="font-medium">{product.name}</div>
-                          <div className="text-gray-500 text-sm line-clamp-1">{product.description}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">{product.price.toFixed(2)} €</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            product.stock > 10 ? 'bg-green-100 text-green-800' :
-                            product.stock > 0 ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {product.stock} en stock
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {category?.name || 'Catégorie inconnue'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <div className="flex justify-end space-x-2">
-                            <button
-                              onClick={() => {
-                                setSelectedProduct(product);
-                                setIsEditModalOpen(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-900 p-1"
-                              title="Modifier"
-                            >
-                              <Edit size={18} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedProduct(product);
-                                setIsDeleteModalOpen(true);
-                              }}
-                              className="text-red-600 hover:text-red-900 p-1"
-                              title="Supprimer"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                <MenuItem value="">Select Category</MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category.id} value={category.id.toString()}>{category.nom}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth margin="dense" type="file" name="image" onChange={handleProductFormChange}
+              InputLabelProps={{ shrink: true }} label="Image"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenProductDialog(false)} startIcon={<Cancel />}>Cancel</Button>
+            <Button onClick={handleProductSubmit} variant="contained" startIcon={<Save />}>
+              {editingProductId ? 'Update' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Product Cards */}
+        <Grid container spacing={3}>
+          {produits.length === 0 && (
+            <Grid item xs={12}>
+              <Typography>No products found.</Typography>
+            </Grid>
           )}
-        </div>
-      )}
-      
-      {/* Modales */}
-      {isAddCategoryModalOpen && <CategoryFormModal />}
-      {isAddProductModalOpen && <ProductFormModal />}
-      {isEditModalOpen && <ProductFormModal isEdit />}
-      
-      {/* Modal de confirmation de suppression */}
-      {isDeleteModalOpen && selectedProduct && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg w-full max-w-md p-6">
-            <h3 className="text-lg font-bold mb-4">Confirmer la suppression</h3>
-            <p className="mb-6">Êtes-vous sûr de vouloir supprimer le produit "{selectedProduct.name}" ? Cette action est irréversible.</p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDeleteProduct}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+          {produits.map((produit) => (
+            <Grid item xs={12} sm={6} md={4} key={produit.id}>
+              <Card sx={{ boxShadow: 3, borderRadius: 2, overflow: 'hidden' }}>
+                <CardMedia
+                  component="img"
+                  height="140"
+                  image={getImageUrl(produit.image, 'Product', produit.nom) || 'https://via.placeholder.com/140'}
+                  alt={produit.nom}
+                  sx={{ objectFit: 'cover' }}
+                  onError={() => console.error(`[Product] Failed to load image for ${produit.nom}`)}
+                />
+                <CardContent>
+                  <Typography variant="h6" fontWeight="bold">{produit.nom}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Price: ${produit.prix}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Stock: {produit.stock}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Category: {produit.category_produit_details.nom}
+                  </Typography>
+                  {!produit.image && (
+                    <Typography variant="body2" color="text.secondary">
+                      No image available
+                    </Typography>
+                  )}
+                </CardContent>
+                <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
+                  <IconButton onClick={() => handleEditProduct(produit)}><Edit /></IconButton>
+                  <IconButton onClick={() => handleDeleteProduct(produit.id)}><Delete /></IconButton>
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    </Box>
   );
 };
 

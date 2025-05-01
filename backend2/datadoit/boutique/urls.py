@@ -11,7 +11,7 @@ urlpatterns = [
     
     # CategoryProduit URLs
     path('category_produits/', views.category_produit_list_create, name='category_produit-list-create'),
-    path('category_produits/<int:pk>/', views.category_produit_detail, name='category_produit-detail'),
+    path('category_produits/<int:pk>/', views.category_produit_retrieve_update_destroy, name='category_produit-detail'),
     
     # Produit URLs
     path('produits/', views.produit_list_create, name='produit-list-create'),
