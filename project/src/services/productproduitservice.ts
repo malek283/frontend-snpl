@@ -10,6 +10,7 @@ export const getProduits = async (categoryProduitId?: string): Promise<Produit[]
 };
 
 export const createProduit = async (produitData: ProduitCreatePayload): Promise<Produit> => {
+  console.log('produitData', produitData)
   const formData = new FormData();
   Object.entries(produitData).forEach(([key, value]) => {
     if (value !== null && value !== undefined) {

@@ -5,7 +5,7 @@ urlpatterns = [
     # Boutique URLs
 
     
-     path('boutiquechat/', views.boutique_list_createchat, name='boutique-list-create'),
+    path('boutiquechat/', views.boutique_list_createchat, name='boutique-list-create'),
     path('boutiques/', views.boutique_list_create, name='boutique-list-create'),
     path('boutiques/<int:pk>/', views.boutique_retrieve_update_destroy, name='boutique-retrieve-update-destroy'),
     

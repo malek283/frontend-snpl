@@ -52,7 +52,6 @@ def boutique_list_createchat(request):
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des boutiques: {str(e)}")
             return Response({'error': 'Une erreur est survenue'}, status=500)
-
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def boutique_list_create(request):
@@ -81,23 +80,23 @@ def boutique_list_create(request):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        data = request.data.copy()
         logger.debug(f"POST request.data: {request.data}, request.FILES: {request.FILES}")
-        if 'logo' in request.FILES:
-            data['logo_file'] = request.FILES['logo']
-            logger.debug(f"Assigned logo_file: {data['logo_file']}")
-        if 'image' in request.FILES:
-            data['image_file'] = request.FILES['image']
-            logger.debug(f"Assigned image_file: {data['image_file']}")
-        serializer = BoutiqueSerializer(data=data, context={'request': request})
+
+        serializer = BoutiqueSerializer(data=request.data, context={'request': request})
+
         if serializer.is_valid():
             boutique = serializer.save(marchand=marchand)
             logger.debug(f"Created Boutique: {boutique.nom}, logo: {boutique.logo}, image: {boutique.image}")
-            response = Response(BoutiqueSerializer(boutique, context={'request': request}).data, status=status.HTTP_201_CREATED)
+            response = Response(
+                BoutiqueSerializer(boutique, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
             response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             return response
+
         logger.error(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])

@@ -268,10 +268,10 @@ const ShopCreatorPage = () => {
       formData.append('marchand', user.id.toString());
 
       if (logo instanceof File) {
-        formData.append('logo', logo);
+        formData.append('logo_input', logo);
       }
       if (image instanceof File) {
-        formData.append('image', image);
+        formData.append('image_input', image);
       }
 
       console.log('Submitting boutique with the following data:');

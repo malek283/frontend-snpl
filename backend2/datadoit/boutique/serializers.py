@@ -108,18 +108,33 @@ class MarchandSerializer(serializers.ModelSerializer):
         model = Marchand
         fields = ['user', 'is_marchant']
 
+from rest_framework import serializers
+from .models import Boutique
+import logging
+from django.db import transaction
+import os
+
+logger = logging.getLogger(__name__)
+from rest_framework import serializers
+from .models import Boutique
+import logging
+from django.db import transaction
+import os
+
+logger = logging.getLogger(__name__)
+
 class BoutiqueSerializer(serializers.ModelSerializer):
     marchand = serializers.StringRelatedField()
-    logo = serializers.SerializerMethodField()
-    image = serializers.SerializerMethodField()
-    logo_file = serializers.ImageField(write_only=True, required=False, allow_null=True)
-    image_file = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    logo = serializers.SerializerMethodField()  # For returning logo URL
+    image = serializers.SerializerMethodField()  # For returning image URL
+    logo_input = serializers.ImageField(write_only=True, required=False, allow_null=True, source='logo')  # For file upload
+    image_input = serializers.ImageField(write_only=True, required=False, allow_null=True, source='image')  # For file upload
 
     class Meta:
         model = Boutique
         fields = [
-            'id', 'nom', 'description', 'logo', 'logo_file', 'adresse', 'telephone', 'email',
-            'image', 'image_file', 'category_boutique', 'marchand', 'created_at', 'updated_at'
+            'id', 'nom', 'description', 'logo', 'logo_input', 'adresse', 'telephone', 'email',
+            'image', 'image_input', 'category_boutique', 'marchand', 'created_at', 'updated_at'
         ]
         read_only_fields = ['marchand', 'created_at', 'updated_at']
 
@@ -156,8 +171,8 @@ class BoutiqueSerializer(serializers.ModelSerializer):
             return None
 
     def create(self, validated_data):
-        logo_file = validated_data.pop('logo_file', None)
-        image_file = validated_data.pop('image_file', None)
+        logo_file = validated_data.pop('logo', None)  # Pop 'logo' (from logo_input)
+        image_file = validated_data.pop('image', None)  # Pop 'image' (from image_input)
         logger.debug(f"Creating Boutique with validated_data: {validated_data}, logo_file: {logo_file}, image_file: {image_file}")
         with transaction.atomic():
             instance = super().create(validated_data)
@@ -185,8 +200,8 @@ class BoutiqueSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        logo_file = validated_data.pop('logo_file', None)
-        image_file = validated_data.pop('image_file', None)
+        logo_file = validated_data.pop('logo', None)  # Pop 'logo' (from logo_input)
+        image_file = validated_data.pop('image', None)  # Pop 'image' (from image_input)
         logger.debug(f"Updating Boutique with validated_data: {validated_data}, logo_file: {logo_file}, image_file: {image_file}")
         with transaction.atomic():
             instance = super().update(instance, validated_data)
@@ -210,7 +225,6 @@ class BoutiqueSerializer(serializers.ModelSerializer):
                 logger.error(f"Error updating images for Boutique {instance.nom} (id: {instance.id}): {str(e)}")
                 raise
         return instance
-
 class CategoryProduitSerializer(serializers.ModelSerializer):
     boutique = serializers.PrimaryKeyRelatedField(
         queryset=Boutique.objects.all(),

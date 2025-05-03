@@ -66,7 +66,7 @@ class Client(models.Model):
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
-        default=1,
+       
         primary_key=True,
         related_name='client_profile'
     )
@@ -82,7 +82,7 @@ class Client(models.Model):
 class Marchand(models.Model):
     user = models.OneToOneField(
         User,
-         default=1,
+        
         on_delete=models.CASCADE,
         primary_key=True,
         related_name='marchand_profile'
@@ -98,7 +98,7 @@ class Marchand(models.Model):
 class Admin(models.Model):
     user = models.OneToOneField(
         User,
-         default=1,
+     
         on_delete=models.CASCADE,
         primary_key=True,
         related_name='admin_profile'

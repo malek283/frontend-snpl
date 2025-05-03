@@ -22,11 +22,11 @@ class CategoryBoutique(models.Model):
 class Boutique(models.Model):
     nom = models.CharField(max_length=255, verbose_name=_("Nom"))
     description = models.TextField(blank=True, null=True, verbose_name=_("Description"))
-    logo = models.ImageField(upload_to='boutique_logos/', blank=True, null=True, verbose_name=_("Logo"))
+    logo = models.ImageField(upload_to='boutique_logos/', blank=True,  verbose_name=_("Logo"))
     adresse = models.CharField(max_length=255, blank=True, null=True, verbose_name=_("Adresse"))
     telephone = models.CharField(max_length=255, blank=True, null=True, verbose_name=_("Téléphone"))
     email = models.EmailField(blank=True, null=True, validators=[validate_email], verbose_name=_("Email"))
-    image = models.ImageField(upload_to='boutique_images/', blank=True, null=True, verbose_name=_("Image"))
+    image = models.ImageField(upload_to='boutique_images/', blank=True, verbose_name=_("Image"))
     category_boutique = models.ForeignKey(
         CategoryBoutique,
         null=True,
