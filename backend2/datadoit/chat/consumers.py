@@ -1,8 +1,10 @@
+# chat/consumers.py
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 from django.contrib.auth import get_user_model
 from channels.db import database_sync_to_async
-from .models import ChatRoom, ChatMessage, Notification, PinnedMessage, MessageReaction, MessageRead, Shop
+from .models import ChatRoom, ChatMessage, Notification, PinnedMessage, MessageReaction, MessageRead
+from boutique.models import Boutique
 import logging
 from datetime import datetime
 
@@ -11,133 +13,185 @@ User = get_user_model()
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        user = self.scope['user']
-        if not user.is_authenticated:
-            logger.warning(f"Unauthenticated user attempted to connect: {self.scope.get('path')}")
-            await self.close(code=4001, reason="Authentication required")
+        self.room_name = self.scope['url_route']['kwargs']['room_name']
+        self.room_group_name = f'chat_{self.room_name}'
+        self.user = self.scope['user']
+        self.role = self.scope['query_string'].decode().split('role=')[1].split('&')[0]
+        self.boutique_id = self.scope['query_string'].decode().split('boutique_id=')[1].split('&')[0]
+
+        # Validation de l'accès
+        if not await self.validate_access():
+            await self.close(code=4003)
             return
 
-        try:
-            self.room_name = self.scope['url_route']['kwargs']['room_name']
-            self.room_group_name = f'chat_{self.room_name}'
-            self.room = await self.get_room(self.room_name)
-        except KeyError as e:
-            logger.error(f"Missing room_name in URL route: {e}")
-            await self.close(code=4004, reason="Invalid room name")
-            return
-
-        # Validate user access based on role and room type
-        if not await self.validate_access(user, self.room):
-            logger.warning(f"User {user.email} unauthorized for room {self.room_name}")
-            await self.close(code=4003, reason="Unauthorized access")
-            return
-
-        await self.add_user_to_room(user)
-        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        # Rejoindre le groupe de la salle
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
         await self.accept()
-        logger.info(f"User {user.email} connected to room {self.room_name}")
 
-        # Notify Marchant of customer entry (for shop rooms)
-        if self.room.room_type == 'shop' and user.role == 'Client':
-            await self.notify_customer_entered(user)
-
-        # Send initial data
-        await self.notify_member_status(True)
-        await self.send_previous_messages()
-        await self.send_members()
-        await self.send_notifications()
+    async def validate_access(self):
+        try:
+            if self.role == 'marchand':
+                # Vérifier que le marchand a accès à cette boutique
+                boutique = await database_sync_to_async(Boutique.objects.get)(id=self.boutique_id)
+                return boutique.marchand.user == self.user
+            elif self.role == 'client':
+                # Vérifier que le client a accès à cette boutique
+                boutique = await database_sync_to_async(Boutique.objects.get)(id=self.boutique_id)
+                return True  # Les clients peuvent accéder à toutes les boutiques
+            return False
+        except Exception as e:
+            print(f"Erreur de validation d'accès: {str(e)}")
+            return False
 
     async def disconnect(self, close_code):
-        if hasattr(self.scope, 'user') and self.scope['user'].is_authenticated:
-            await self.notify_member_status(False)
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        # Quitter le groupe de la salle
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
 
     async def receive(self, text_data):
-        try:
-            text_data_json = json.loads(text_data)
-            message_type = text_data_json.get('type')
-            logger.info(f"Received message type: {message_type}")
+        data = json.loads(text_data)
+        message_type = data.get('type')
 
-            if message_type == 'get_members' or message_type == 'get_customers':
-                await self.send_members()
-            elif message_type == 'chat_message':
-                message = text_data_json.get('message')
-                customer_id = text_data_json.get('customer_id')
-                reply_to = text_data_json.get('reply_to')
-                if not message:
-                    logger.warning("Received empty message")
-                    return
-                user = self.scope['user']
-                message_id = await self.save_message(self.room, user, message, customer_id, reply_to)
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'chat_message',
-                        'id': str(message_id),
-                        'message': message,
-                        'sender_name': user.name,
-                        'sender_id': str(user.id),
-                        'customer_id': customer_id,
-                        'reply_to': reply_to,
-                        'time': self.get_current_time().isoformat()
-                    }
-                )
-                await self.save_and_send_notification(message, user.name, message_id)
-            elif message_type == 'edit_message':
-                message_id = text_data_json.get('message_id')
-                new_text = text_data_json.get('new_text')
-                if message_id and new_text:
-                    await self.edit_message(message_id, new_text)
-                    await self.notify_message_edited(message_id, new_text)
-            elif message_type == 'delete_message':
-                message_id = text_data_json.get('message_id')
-                if message_id:
-                    await self.delete_message(message_id)
-                    await self.notify_message_deleted(message_id)
-            elif message_type == 'pin_message':
-                message_id = text_data_json.get('message_id')
-                if message_id:
-                    await self.pin_message(message_id)
-                    await self.notify_message_pinned(message_id)
-            elif message_type == 'react_to_message':
-                message_id = text_data_json.get('message_id')
-                emoji = text_data_json.get('emoji')
-                if message_id and emoji:
-                    await self.react_to_message(message_id, emoji)
-                    await self.notify_message_reaction(message_id, emoji)
-            elif message_type == 'mark_as_read':
-                message_id = text_data_json.get('message_id')
-                if message_id:
-                    db_message_id = await self.mark_message_as_read(message_id)
-                    if db_message_id:
-                        await self.notify_message_read(db_message_id)
-            elif message_type == 'get_notifications':
-                await self.send_notifications()
-            elif message_type == 'mark_notification_as_read':
-                notification_id = text_data_json.get('notification_id')
-                if notification_id:
-                    await self.mark_notification_as_read(notification_id)
-                    await self.notify_notification_read(notification_id)
-            elif message_type == 'mark_all_notifications_as_read':
-                await self.mark_all_notifications_as_read()
-                await self.notify_all_notifications_read()
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON data received: {e}")
-        except Exception as e:
-            logger.error(f"Error in receive: {e}")
+        if message_type == 'connect':
+            # Gérer la connexion initiale
+            await self.handle_connect(data)
+        elif message_type == 'chat_message':
+            # Gérer l'envoi de message
+            await self.handle_chat_message(data)
+        elif message_type == 'get_customers':
+            # Récupérer la liste des clients
+            await self.handle_get_customers(data)
+        elif message_type == 'get_members':
+            # Récupérer la liste des membres
+            await self.handle_get_members(data)
+        elif message_type == 'get_notifications':
+            # Récupérer les notifications
+            await self.handle_get_notifications(data)
 
-    # WebSocket Message Handlers
-    async def chat_message(self, event):
+    async def handle_connect(self, data):
+        # Envoyer un message de confirmation de connexion
         await self.send(text_data=json.dumps({
-            'type': 'chat_message',
-            'id': event['id'],
-            'message': event['message'],
-            'sender_name': event['sender_name'],
-            'sender_id': event['sender_id'],
-            'customer_id': event.get('customer_id'),
-            'reply_to': event.get('reply_to'),
-            'time': event['time']
+            'type': 'connection_established',
+            'message': 'Connexion établie avec succès'
         }))
+
+    async def handle_chat_message(self, data):
+        message = data.get('message')
+        customer_id = data.get('customer_id')
+        boutique_id = data.get('boutique_id')
+
+        # Vérifier que le message est pour la bonne boutique
+        if str(boutique_id) != self.boutique_id:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Message envoyé à la mauvaise boutique',
+                'code': 4000
+            }))
+            return
+
+        # Envoyer le message au groupe
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': message,
+                'sender_id': str(self.user.id),
+                'sender_name': f"{self.user.prenom} {self.user.nom}",
+                'customer_id': customer_id,
+                'boutique_id': boutique_id,
+                'time': datetime.now().isoformat()
+            }
+        )
+
+    async def handle_get_customers(self, data):
+        try:
+            # Récupérer les clients de la boutique
+            customers = await database_sync_to_async(list)(
+                User.objects.filter(
+                    role='client',
+                    chat_messages__boutique_id=self.boutique_id
+                ).distinct()
+            )
+            
+            await self.send(text_data=json.dumps({
+                'type': 'customers',
+                'customers': [
+                    {
+                        'id': str(customer.id),
+                        'name': f"{customer.prenom} {customer.nom}",
+                        'isOnline': True  # À implémenter avec un système de présence
+                    }
+                    for customer in customers
+                ]
+            }))
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': f"Erreur lors de la récupération des clients: {str(e)}",
+                'code': 4000
+            }))
+
+    async def handle_get_members(self, data):
+        try:
+            # Récupérer les membres (marchands) de la boutique
+            boutique = await database_sync_to_async(Boutique.objects.get)(id=self.boutique_id)
+            marchand = await database_sync_to_async(lambda: boutique.marchand)()
+            
+            await self.send(text_data=json.dumps({
+                'type': 'members',
+                'members': [
+                    {
+                        'id': str(marchand.user.id),
+                        'name': f"{marchand.user.prenom} {marchand.user.nom}",
+                        'isOnline': True  # À implémenter avec un système de présence
+                    }
+                ]
+            }))
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': f"Erreur lors de la récupération des membres: {str(e)}",
+                'code': 4000
+            }))
+
+    async def handle_get_notifications(self, data):
+        try:
+            # Récupérer les notifications de la boutique
+            notifications = await database_sync_to_async(list)(
+                Notification.objects.filter(
+                    boutique_id=self.boutique_id,
+                    user=self.user
+                ).order_by('-created_at')[:10]
+            )
+            
+            await self.send(text_data=json.dumps({
+                'type': 'notifications',
+                'notifications': [
+                    {
+                        'id': str(notification.id),
+                        'message': notification.message,
+                        'sender_name': notification.sender_name,
+                        'time': notification.created_at.isoformat(),
+                        'read': notification.read
+                    }
+                    for notification in notifications
+                ]
+            }))
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': f"Erreur lors de la récupération des notifications: {str(e)}",
+                'code': 4000
+            }))
+
+    async def chat_message(self, event):
+        # Envoyer le message au WebSocket
+        await self.send(text_data=json.dumps(event))
 
     async def customer_entered(self, event):
         await self.send(text_data=json.dumps({
@@ -210,32 +264,108 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # Database Operations
     @database_sync_to_async
-    def get_room(self, room_name):
+    def get_room(self, room_name, user):
         try:
+            # Try to get existing ChatRoom
             return ChatRoom.objects.get(name=room_name)
         except ChatRoom.DoesNotExist:
             room_type = 'admin' if room_name.startswith('admin_') else 'shop'
-            shop = None
+            boutique = None
             if room_type == 'shop':
-                shop = Shop.objects.get(id=room_name)
-            return ChatRoom.objects.create(name=room_name, room_type=room_type, shop=shop)
+                # Extract ID from room_name (e.g., shop_29 -> 29 or shop_41 -> user ID 41)
+                try:
+                    room_id = room_name.replace('shop_', '')
+                    try:
+                        # First, try to treat room_id as boutique_id
+                        boutique = Boutique.objects.get(id=room_id)
+                    except Boutique.DoesNotExist:
+                        # If no boutique with room_id, assume room_id is user_id and find user's boutique
+                        boutique = Boutique.objects.get(marchand_id=room_id)
+                    room, created = ChatRoom.objects.get_or_create(
+                        name=f"shop_{boutique.id}",  # Use boutique.id (e.g., shop_29)
+                        defaults={'room_type': room_type, 'boutique': boutique}
+                    )
+                    # Create alias room for original room_name if different
+                    if room_name != f"shop_{boutique.id}":
+                        alias_room, alias_created = ChatRoom.objects.get_or_create(
+                            name=room_name,
+                            defaults={'room_type': room_type, 'boutique': boutique}
+                        )
+                        if alias_created:
+                            alias_room.members.add(user)
+                    if created:
+                        room.members.add(user)
+                    return room
+                except Boutique.DoesNotExist:
+                    # Create a new Boutique if none exists for the user
+                    boutique = Boutique.objects.create(
+                        marchand=user,
+                        nom=f"{user.name}'s Boutique",
+                        description='Auto-created boutique',
+                        adresse='',
+                        telephone='',
+                        email=user.email
+                    )
+                    room, created = ChatRoom.objects.get_or_create(
+                        name=f"shop_{boutique.id}",
+                        defaults={'room_type': room_type, 'boutique': boutique}
+                    )
+                    if created:
+                        room.members.add(user)
+                    # Create alias for original room_name
+                    if room_name != f"shop_{boutique.id}":
+                        alias_room, alias_created = ChatRoom.objects.get_or_create(
+                            name=room_name,
+                            defaults={'room_type': room_type, 'boutique': boutique}
+                        )
+                        if alias_created:
+                            alias_room.members.add(user)
+                    return room
+            else:
+                # Create admin room
+                room, created = ChatRoom.objects.get_or_create(
+                    name=room_name,
+                    defaults={'room_type': room_type}
+                )
+                if created:
+                    room.members.add(user)
+                return room
 
     @database_sync_to_async
     def validate_access(self, user, room):
-        if room.room_type == 'admin' and user.role != 'admin':
-            return False
+        logger.debug(f"Validating access for user {user.email} (role: {user.role}) in room {room.name} (type: {room.room_type})")
+        if room.room_type == 'admin':
+            if user.role.lower() != 'admin':
+                return {'allowed': False, 'reason': 'User is not an Admin'}
+            return {'allowed': True, 'reason': ''}
         if room.room_type == 'shop':
-            if user.role == 'Marchant' and room.shop.Marchant != user:
-                return False
-            if user.role not in ['Marchant', 'customer']:
-                return False
-        return True
+            user_role = user.role.lower()
+            if user_role == 'marchand':
+                if room.boutique.marchand != user:
+                    return {'allowed': False, 'reason': f'User is not the marchand of boutique {room.boutique.id}'}
+            elif user_role != 'client':
+                return {'allowed': False, 'reason': f'Invalid role: {user.role}. Must be Marchand or Client'}
+            return {'allowed': True, 'reason': ''}
+        return {'allowed': False, 'reason': f'Unknown room type: {room.room_type}'}
+
+    @database_sync_to_async
+    def has_access(self, user, room):
+        is_member = room.members.filter(id=user.id).exists()
+        logger.debug(f"User {user.email} membership check for room {room.name}: {is_member}")
+        if not is_member:
+            # Auto-add user to room if they are the marchand or a client
+            if room.room_type == 'shop' and (user == room.boutique.marchand or user.role.lower() == 'client'):
+                room.members.add(user)
+                is_member = True
+                logger.info(f"Auto-added user {user.email} to room {room.name}")
+        return is_member
 
     @database_sync_to_async
     def add_user_to_room(self, user):
         room = ChatRoom.objects.get(name=self.room_name)
         if user not in room.members.all():
             room.members.add(user)
+            logger.info(f"Added user {user.email} to room {room.name}")
 
     @database_sync_to_async
     def save_message(self, room, user, message, customer_id, reply_to):
@@ -252,8 +382,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_room_members(self, room):
         if room.room_type == 'shop':
-            return list(room.members.filter(role='Client').values('id', 'name', 'role', 'is_online'))
-        return list(room.members.filter(role='Admin').values('id', 'name', 'role', 'is_online'))
+            return list(room.members.filter(role__iexact='Client').values('id', 'name', 'role', 'is_online'))
+        return list(room.members.filter(role__iexact='Admin').values('id', 'name', 'role', 'is_online'))
 
     @database_sync_to_async
     def get_previous_messages(self, room):
@@ -318,7 +448,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # Notification Methods
     async def notify_customer_entered(self, user):
-        Marchant = await database_sync_to_async(lambda: self.room.shop.Marchant)()
+        marchand = await database_sync_to_async(lambda: self.room.boutique.marchand)()
         await self.channel_layer.group_send(
             self.room_group_name,
             {
@@ -328,8 +458,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             }
         )
         notification = await database_sync_to_async(Notification.objects.create)(
-            user=Marchant,
-            message=f"{user.name} has entered your shop",
+            user=marchand,
+            message=f"{user.name} has entered your boutique",
             sender=user.name,
             read=False
         )
@@ -377,7 +507,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 'message': msg['message'],
                 'sender_name': msg['user__name'],
                 'sender_id': str(msg['user__id']),
-                'customer_id': str(msg['customer__id']),
+                'customer_id': str(msg['customer__id']) if msg['customer__id'] else None,
                 'reply_to': msg.get('reply_to_id'),
                 'time': msg['timestamp'].isoformat(),
                 'is_edited': msg.get('is_edited', False),

@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+// src/dashboard/CustomerMessages.tsx
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
+
 import { MessageSquare, Search, Edit2, Trash2, Pin, Heart } from 'lucide-react';
 import { useAuthStore } from '../components/Store/authStore';
+import { getBoutiquechat } from '../services/productproduitservice';
 
-// Define interfaces
+// Interfaces (unchanged)
 interface ChatMessage {
   id: string;
   customerId: string;
@@ -35,6 +39,23 @@ interface Notification {
 interface User {
   id: string;
   role: 'client' | 'marchand' | 'admin';
+  email: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  created_at: string;
+  updated_at: string;
+  has_boutique: boolean;
+  is_active: boolean;
+  is_approved: boolean;
+  is_staff: boolean;
+}
+
+interface Boutique {
+  id: number;
+  name: string;
+  marchand: number;
+  created_at: string;
 }
 
 const roleMap: Record<User['role'], 'customer' | 'merchant' | 'admin'> = {
@@ -43,16 +64,54 @@ const roleMap: Record<User['role'], 'customer' | 'merchant' | 'admin'> = {
   admin: 'admin',
 };
 
+// Utility function to compute room details (unchanged)
+const computeRoomDetails = (
+  userId: string | undefined,
+  userRole: User['role'] | undefined,
+  boutiqueId: string | null
+): { roomName: string; roomType: 'shop' | 'admin'; error: string | null } => {
+  console.log('computeRoomDetails called:', { userId, userRole, boutiqueId });
+  if (!userId || !userRole) {
+    return { roomName: '', roomType: 'shop', error: 'Utilisateur non authentifié' };
+  }
+
+  const serverRole = roleMap[userRole];
+  let roomName = '';
+  let roomType: 'shop' | 'admin' = 'shop';
+
+  if (serverRole === 'merchant') {
+    roomType = 'shop';
+    if (!boutiqueId) {
+      return { roomName: '', roomType: 'shop', error: 'ID de boutique manquant pour le marchand' };
+    }
+    roomName = `shop_${boutiqueId}`; // e.g., shop_29
+  } else if (serverRole === 'admin') {
+    roomType = 'admin';
+    roomName = `admin_${userId}`;
+  } else if (serverRole === 'customer') {
+    roomType = 'shop';
+    if (!boutiqueId) {
+      return { roomName: '', roomType: 'shop', error: 'ID de boutique manquant pour le client' };
+    }
+    roomName = `shop_${boutiqueId}`; // e.g., shop_29
+  } else {
+    return { roomName: '', roomType: 'shop', error: 'Rôle utilisateur invalide' };
+  }
+
+  return { roomName, roomType, error: null };
+};
+
 const CustomerMessages: React.FC = () => {
-  const { accessToken, user } = useAuthStore((state) => {
-    console.log('useAuthStore called:', { accessToken: state.accessToken, user: state.user });
-    return {
-      accessToken: state.accessToken,
-      user: state.user as User | null,
-    };
-  });
+  // State
+  const { accessToken, user } = useAuthStore((state) => ({
+    accessToken: state.accessToken,
+    user: state.user as User | null
+  }));
+
+  const { boutiqueId: paramBoutiqueId } = useParams<{ boutiqueId: string }>();
   const [roomName, setRoomName] = useState<string>('');
   const [roomType, setRoomType] = useState<'shop' | 'admin'>('shop');
+  const [boutiqueId, setBoutiqueId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -60,88 +119,148 @@ const CustomerMessages: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isBoutiqueFetched, setIsBoutiqueFetched] = useState(false);
 
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 3;
 
   // Memoize user properties
   const userId = useMemo(() => user?.id, [user]);
   const userRole = useMemo(() => user?.role, [user]);
 
-  // Compute roomName and roomType
+  // Memoize room details computation
+  const roomDetails = useMemo(() => {
+    if (!boutiqueId || !userId || !userRole) return null;
+    return computeRoomDetails(userId, userRole, boutiqueId);
+  }, [boutiqueId, userId, userRole]);
+
+  // Effect for room details
   useEffect(() => {
-    if (!userId || !userRole) {
-      setError('Utilisateur non authentifié');
-      setRoomName('');
-      setRoomType('shop');
-      return;
-    }
+    if (!roomDetails) return;
+    setRoomName(roomDetails.roomName);
+    setRoomType(roomDetails.roomType);
+    setError(roomDetails.error);
+  }, [roomDetails]);
 
-    const serverRole = roleMap[userRole];
-    let newRoomName = '';
-    let newRoomType: 'shop' | 'admin' = 'shop';
+  // Fetch boutique ID
+  useEffect(() => {
+    if (!userId || !userRole || isBoutiqueFetched) return;
 
-    if (serverRole === 'merchant') {
-      newRoomType = 'shop';
-      newRoomName = `shop_${userId}`;
-    } else if (serverRole === 'admin') {
-      newRoomType = 'admin';
-      newRoomName = `admin_${userId}`;
-    } else if (serverRole === 'customer') {
-      newRoomType = 'shop';
-      newRoomName = 'shop_default';
-    } else {
-      setError('Rôle utilisateur invalide');
-      return;
-    }
+    const fetchBoutiqueId = async () => {
+      try {
+        const boutiques = await getBoutiquechat(userRole === 'client' ? paramBoutiqueId : undefined);
+        let selectedBoutiqueId: string | null = null;
 
-    console.log('Room setup:', { newRoomName, newRoomType, userId, userRole });
-    setRoomName(newRoomName);
-    setRoomType(newRoomType);
-  }, [userId, userRole]);
+        if (userRole === 'marchand') {
+          if (boutiques.length === 0) {
+            throw new Error('Aucune boutique trouvée pour ce marchand');
+          }
+          selectedBoutiqueId = boutiques[0].id.toString();
+        } else if (userRole === 'client' && paramBoutiqueId) {
+          const boutique = boutiques.find((b: { id: number }) =>
+            b.id.toString() === paramBoutiqueId
+          );
+          if (!boutique) {
+            throw new Error('Boutique non trouvée pour cet ID');
+          }
+          selectedBoutiqueId = boutique.id.toString();
+        } else {
+          throw new Error('Contexte de boutique invalide');
+        }
+
+        setBoutiqueId(selectedBoutiqueId);
+        setIsBoutiqueFetched(true);
+      } catch (err) {
+        console.error('Failed to fetch boutique ID:', err);
+        setError('Impossible de charger la boutique');
+        setIsBoutiqueFetched(true);
+      }
+    };
+
+    fetchBoutiqueId();
+  }, [userId, userRole, paramBoutiqueId, isBoutiqueFetched]);
 
   // WebSocket connection setup
   useEffect(() => {
-    if (!accessToken || !roomName) {
-      setError('Jeton d’authentification ou nom de salle manquant');
+    if (!accessToken || !roomName || !isBoutiqueFetched) {
+      if (!accessToken) setError('Jeton d\'authentification manquant');
+      if (!roomName) setError('Nom de salle manquant');
       return;
     }
 
-    console.log('WebSocket useEffect dependencies:', { roomName, accessToken, roomType, userId, userRole });
-
     const connectWebSocket = () => {
-      console.log('Attempting WebSocket connection to:', `ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}`);
-      ws.current = new WebSocket(`ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}`);
+      if (reconnectAttempts.current >= maxReconnectAttempts) {
+        setError('Échec de la connexion WebSocket après plusieurs tentatives. Veuillez réessayer plus tard.');
+        return;
+      }
+
+      // Ajout des paramètres de rôle et boutique pour la validation côté serveur
+      const wsUrl = `ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}&role=${userRole}&boutique_id=${boutiqueId}`;
+      ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected for room:', roomName);
         setError(null);
-        ws.current?.send(JSON.stringify({ type: roomType === 'shop' ? 'get_customers' : 'get_members' }));
-        ws.current?.send(JSON.stringify({ type: 'get_notifications' }));
+        reconnectAttempts.current = 0;
+        
+        // Envoi des informations de connexion
+        ws.current?.send(JSON.stringify({
+          type: 'connect',
+          role: userRole,
+          boutique_id: boutiqueId,
+          user_id: userId
+        }));
+
+        // Récupération des messages et membres selon le rôle
+        if (roomType === 'shop') {
+          ws.current?.send(JSON.stringify({ 
+            type: 'get_customers',
+            boutique_id: boutiqueId
+          }));
+        } else {
+          ws.current?.send(JSON.stringify({ 
+            type: 'get_members',
+            boutique_id: boutiqueId
+          }));
+        }
+        
+        ws.current?.send(JSON.stringify({ 
+          type: 'get_notifications',
+          boutique_id: boutiqueId
+        }));
       };
 
       ws.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data);
 
         switch (data.type) {
+          case 'error':
+            setError(data.message || 'Erreur WebSocket inconnue');
+            if (data.code === 4003) {
+              ws.current?.close(4003, 'Accès non autorisé');
+            }
+            break;
           case 'chat_message':
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: data.id,
-                customerId: data.customer_id || selectedCustomer || 'unknown',
-                customerName: data.sender_name || 'Inconnu',
-                senderId: data.sender_id,
-                content: data.message,
-                date: data.time,
-                isFromMerchant: userRole === 'marchand' && data.sender_id === userId,
-                hasEarlyPaymentReward: data.message.includes('EARLY10'),
-                isEdited: data.is_edited || false,
-                isDeleted: data.is_deleted || false,
-                replyTo: data.reply_to || null,
-              },
-            ]);
+            // Vérification que le message est pour la bonne boutique
+            if (data.boutique_id === boutiqueId) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: data.id,
+                  customerId: data.customer_id || selectedCustomer || 'unknown',
+                  customerName: data.sender_name || 'Inconnu',
+                  senderId: data.sender_id,
+                  content: data.message,
+                  date: data.time,
+                  isFromMerchant: userRole === 'marchand' && data.sender_id === userId,
+                  hasEarlyPaymentReward: data.message.includes('EARLY10'),
+                  isEdited: data.is_edited || false,
+                  isDeleted: data.is_deleted || false,
+                  replyTo: data.reply_to || null,
+                },
+              ]);
+            }
             break;
           case 'customers':
           case 'members':
@@ -165,9 +284,7 @@ const CustomerMessages: React.FC = () => {
             break;
           case 'member_status':
             setMembers((prev) =>
-              prev.map((m) =>
-                m.id === data.user_id ? { ...m, isOnline: data.isOnline } : m
-              )
+              prev.map((m) => (m.id === data.user_id ? { ...m, isOnline: data.isOnline } : m))
             );
             break;
           case 'notification':
@@ -185,21 +302,16 @@ const CustomerMessages: React.FC = () => {
           case 'message_edited':
             setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === data.message_id
-                  ? { ...msg, content: data.new_text, isEdited: true }
-                  : msg
+                msg.id === data.message_id ? { ...msg, content: data.new_text, isEdited: true } : msg
               )
             );
             break;
           case 'message_deleted':
             setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === data.message_id ? { ...msg, isDeleted: true } : msg
-              )
+              prev.map((msg) => (msg.id === data.message_id ? { ...msg, isDeleted: true } : msg))
             );
             break;
           case 'message_pinned':
-            console.log('Message pinned:', data.message_id);
             break;
           case 'message_reaction':
             setMessages((prev) =>
@@ -207,23 +319,17 @@ const CustomerMessages: React.FC = () => {
                 msg.id === data.message_id
                   ? {
                       ...msg,
-                      reactions: [
-                        ...(msg.reactions || []),
-                        { emoji: data.emoji, name: data.sender_name },
-                      ],
+                      reactions: [...(msg.reactions || []), { emoji: data.emoji, name: data.sender_name }],
                     }
                   : msg
               )
             );
             break;
           case 'message_read':
-            console.log('Message read:', data.message_id);
             break;
           case 'notification_read':
             setNotifications((prev) =>
-              prev.map((n) =>
-                n.id === data.notification_id ? { ...n, read: true } : n
-              )
+              prev.map((n) => (n.id === data.notification_id ? { ...n, read: true } : n))
             );
             break;
           case 'all_notifications_read':
@@ -235,14 +341,19 @@ const CustomerMessages: React.FC = () => {
       };
 
       ws.current.onclose = (event) => {
-        console.log('WebSocket closed:', { roomName, code: event.code, reason: event.reason });
-        setError(`Connexion WebSocket interrompue: ${event.reason || 'raison inconnue'}`);
-        reconnectTimeout.current = setTimeout(connectWebSocket, 5000);
+        if (event.code === 4003) {
+          setError('Accès non autorisé à la salle de chat. Vérifiez votre accès à la boutique.');
+          return;
+        }
+        setError(`Connexion WebSocket interrompue: ${event.reason || 'Raison inconnue'}`);
+        reconnectAttempts.current += 1;
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          reconnectTimeout.current = setTimeout(connectWebSocket, 5000);
+        }
       };
 
-      ws.current.onerror = (error) => {
-        console.error('WebSocket error:', { roomName, error });
-        setError('Une erreur WebSocket s’est produite');
+      ws.current.onerror = () => {
+        setError('Une erreur WebSocket s\'est produite. Veuillez réessayer.');
       };
     };
 
@@ -258,40 +369,45 @@ const CustomerMessages: React.FC = () => {
         reconnectTimeout.current = null;
       }
     };
-  }, [roomName, accessToken, roomType, userId, userRole]);
+  }, [accessToken, roomName, roomType, isBoutiqueFetched, boutiqueId, userRole, userId]);
 
-  // Handle sending a new message
-  const handleSendMessage = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+  // Message and notification handlers (unchanged)
+  const handleSendMessage = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newMessage.trim() || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
 
-    ws.current.send(
-      JSON.stringify({
-        type: 'chat_message',
-        message: newMessage,
-        customer_id: roomType === 'shop' ? selectedCustomer : undefined,
-        reply_to: null,
-      })
-    );
-    setNewMessage('');
-  }, [newMessage, roomType, selectedCustomer]);
+      ws.current.send(
+        JSON.stringify({
+          type: 'chat_message',
+          message: newMessage,
+          customer_id: roomType === 'shop' ? selectedCustomer : undefined,
+          boutique_id: boutiqueId,
+          reply_to: null,
+        })
+      );
+      setNewMessage('');
+    },
+    [newMessage, roomType, selectedCustomer, boutiqueId]
+  );
 
-  // Handle offering a reward
-  const handleOfferReward = useCallback((customerId: string) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || roomType !== 'shop') return;
+  const handleOfferReward = useCallback(
+    (customerId: string) => {
+      if (!ws.current || ws.current.readyState !== WebSocket.OPEN || roomType !== 'shop') return;
 
-    const rewardMessage = {
-      type: 'chat_message',
-      message:
-        'Pour vous remercier de votre paiement rapide, nous vous offrons une remise de 10% sur votre prochaine commande ! Code promo : EARLY10',
-      customer_id: customerId,
-      reply_to: null,
-    };
+      ws.current.send(
+        JSON.stringify({
+          type: 'chat_message',
+          message:
+            'Pour vous remercier de votre paiement rapide, nous vous offrons une remise de 10% sur votre prochaine commande ! Code promo : EARLY10',
+          customer_id: customerId,
+          reply_to: null,
+        })
+      );
+    },
+    [roomType]
+  );
 
-    ws.current.send(JSON.stringify(rewardMessage));
-  }, [roomType]);
-
-  // Handle message actions
   const handleEditMessage = useCallback((messageId: string, newText: string) => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !newText) return;
     ws.current.send(
@@ -356,36 +472,35 @@ const CustomerMessages: React.FC = () => {
 
   const handleMarkAllNotificationsAsRead = useCallback(() => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-    ws.current.send(
-      JSON.stringify({
-        type: 'mark_all_notifications_as_read',
-      })
-    );
+    ws.current.send(JSON.stringify({ type: 'mark_all_notifications_as_read' }));
   }, []);
 
-  const handleCustomerSelect = useCallback((customerId: string) => {
-    console.log('Setting selectedCustomer:', { customerId, roomType });
-    setSelectedCustomer(roomType === 'shop' ? customerId : null);
-  }, [roomType]);
+  const handleCustomerSelect = useCallback(
+    (customerId: string) => {
+      console.log('Setting selectedCustomer:', { customerId, roomType });
+      setSelectedCustomer(roomType === 'shop' ? customerId : null);
+    },
+    [roomType]
+  );
 
-  // Filter messages for the selected customer
+  // Memoized computed values (unchanged)
   const customerMessages = useMemo(() => {
     return roomType === 'shop' && selectedCustomer
       ? messages.filter((msg) => msg.customerId === selectedCustomer)
       : messages;
   }, [messages, roomType, selectedCustomer]);
 
-  // Filter members for search
   const filteredMembers = useMemo(() => {
     return members.filter(
       (member) =>
-        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.id.includes(searchQuery)
+        member.name.toLowerCase().includes(searchQuery.toLowerCase()) || member.id.includes(searchQuery)
     );
   }, [members, searchQuery]);
 
+  // Render (unchanged)
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-800">
           {roomType === 'shop' ? 'Messages Clients' : 'Messages Admins'}
@@ -396,7 +511,8 @@ const CustomerMessages: React.FC = () => {
         {error && <p className="text-red-500">{error}</p>}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Main Content */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* Members/Customers List */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b">
@@ -404,17 +520,14 @@ const CustomerMessages: React.FC = () => {
               <input
                 type="text"
                 placeholder={roomType === 'shop' ? 'Rechercher un client...' : 'Rechercher un admin...'}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                className="w-full py-2 pl-10 pr-4 border rounded-lg"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <Search
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={20}
-              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             </div>
           </div>
-          <div className="divide-y max-h-[600px] overflow-y-auto">
+          <div className="max-h-[600px] overflow-y-auto divide-y">
             {filteredMembers.map((member) => (
               <button
                 key={member.id}
@@ -426,14 +539,10 @@ const CustomerMessages: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-gray-900">{member.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {member.isOnline ? 'En ligne' : 'Hors ligne'}
-                    </p>
+                    <p className="text-sm text-gray-500">{member.isOnline ? 'En ligne' : 'Hors ligne'}</p>
                   </div>
-                  {notifications.some(
-                    (n) => n.senderName === member.name && !n.read
-                  ) && (
-                    <span className="h-2 w-2 bg-red-500 rounded-full"></span>
+                  {notifications.some((n) => n.senderName === member.name && !n.read) && (
+                    <span className="w-2 h-2 bg-red-500 rounded-full" />
                   )}
                 </div>
               </button>
@@ -442,7 +551,7 @@ const CustomerMessages: React.FC = () => {
         </div>
 
         {/* Chat Area */}
-        <div className="md:col-span-2 bg-white rounded-lg shadow flex flex-col h-[600px]">
+        <div className="flex flex-col h-[600px] bg-white rounded-lg shadow md:col-span-2">
           {(roomType === 'shop' && selectedCustomer) || roomType === 'admin' ? (
             <>
               <div className="p-4 border-b">
@@ -462,7 +571,7 @@ const CustomerMessages: React.FC = () => {
                   {roomType === 'shop' && selectedCustomer && (
                     <button
                       onClick={() => handleOfferReward(selectedCustomer)}
-                      className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm hover:bg-yellow-200 transition-colors"
+                      className="px-4 py-2 text-sm text-yellow-800 bg-yellow-100 rounded-lg hover:bg-yellow-200 transition-colors"
                     >
                       Offrir une remise
                     </button>
@@ -470,34 +579,28 @@ const CustomerMessages: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                 {customerMessages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex ${
-                      msg.isFromMerchant ? 'justify-end' : 'justify-start'
-                    }`}
+                    className={`flex ${msg.isFromMerchant ? 'justify-end' : 'justify-start'}`}
                     onClick={() => handleMarkMessageAsRead(msg.id)}
                   >
                     <div
-                      className={`relative max-w-xs md:max-w-md rounded-lg px-4 py-2 ${
-                        msg.isFromMerchant
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-800'
-                      } ${
-                        msg.hasEarlyPaymentReward ? 'border-2 border-yellow-400' : ''
-                      } ${msg.isDeleted ? 'opacity-50' : ''}`}
+                      className={`relative max-w-xs px-4 py-2 rounded-lg md:max-w-md ${
+                        msg.isFromMerchant ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
+                      } ${msg.hasEarlyPaymentReward ? 'border-2 border-yellow-400' : ''} ${
+                        msg.isDeleted ? 'opacity-50' : ''
+                      }`}
                     >
                       {msg.isDeleted ? (
                         <p className="text-sm italic">Message supprimé</p>
                       ) : (
                         <>
                           <p className="text-sm">{msg.content}</p>
-                          {msg.isEdited && (
-                            <p className="text-xs italic">Modifié</p>
-                          )}
+                          {msg.isEdited && <p className="text-xs italic">Modifié</p>}
                           {msg.reactions && msg.reactions.length > 0 && (
-                            <div className="flex space-x-2 mt-1">
+                            <div className="flex mt-1 space-x-2">
                               {msg.reactions.map((r, idx) => (
                                 <span key={idx} className="text-xs">
                                   {r.emoji}
@@ -508,9 +611,7 @@ const CustomerMessages: React.FC = () => {
                         </>
                       )}
                       <p
-                        className={`text-xs mt-1 ${
-                          msg.isFromMerchant ? 'text-blue-200' : 'text-gray-500'
-                        }`}
+                        className={`text-xs mt-1 ${msg.isFromMerchant ? 'text-blue-200' : 'text-gray-500'}`}
                       >
                         {new Date(msg.date).toLocaleTimeString('fr-FR', {
                           hour: '2-digit',
@@ -518,13 +619,10 @@ const CustomerMessages: React.FC = () => {
                         })}
                       </p>
                       {!msg.isDeleted && msg.isFromMerchant && (
-                        <div className="absolute top-0 right-0 flex space-x-2 p-1">
+                        <div className="absolute top-0 right-0 flex p-1 space-x-2">
                           <button
                             onClick={() =>
-                              handleEditMessage(
-                                msg.id,
-                                prompt('Nouveau texte:', msg.content) || msg.content
-                              )
+                              handleEditMessage(msg.id, prompt('Nouveau texte:', msg.content) || msg.content)
                             }
                             className="text-gray-500 hover:text-gray-700"
                           >
@@ -566,7 +664,7 @@ const CustomerMessages: React.FC = () => {
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     Envoyer
                   </button>
@@ -574,10 +672,14 @@ const CustomerMessages: React.FC = () => {
               </form>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex items-center justify-center flex-1">
               <div className="text-center text-gray-500">
                 <MessageSquare size={48} className="mx-auto mb-4" />
-                <p>{roomType === 'shop' ? 'Sélectionnez un client pour voir la conversation' : 'Aucune conversation sélectionnée'}</p>
+                <p>
+                  {roomType === 'shop'
+                    ? 'Sélectionnez un client pour voir la conversation'
+                    : 'Aucune conversation sélectionnée'}
+                </p>
               </div>
             </div>
           )}
@@ -586,8 +688,8 @@ const CustomerMessages: React.FC = () => {
 
       {/* Notifications Panel */}
       {notifications.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex justify-between items-center">
+        <div className="p-4 bg-white rounded-lg shadow">
+          <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">Notifications</h2>
             <button
               onClick={handleMarkAllNotificationsAsRead}
@@ -598,16 +700,11 @@ const CustomerMessages: React.FC = () => {
           </div>
           <div className="mt-2 space-y-2">
             {notifications.map((n) => (
-              <div
-                key={n.id}
-                className={`p-2 rounded-lg ${n.read ? 'bg-gray-100' : 'bg-blue-50'}`}
-              >
+              <div key={n.id} className={`p-2 rounded-lg ${n.read ? 'bg-gray-100' : 'bg-blue-50'}`}>
                 <p className="text-sm">
                   <strong>{n.senderName}</strong>: {n.message}
                 </p>
-                <p className="text-xs text-gray-500">
-                  {new Date(n.time).toLocaleString('fr-FR')}
-                </p>
+                <p className="text-xs text-gray-500">{new Date(n.time).toLocaleString('fr-FR')}</p>
                 {!n.read && (
                   <button
                     onClick={() => handleMarkNotificationAsRead(n.id)}
@@ -625,4 +722,4 @@ const CustomerMessages: React.FC = () => {
   );
 };
 
-export default CustomerMessages;
+export default React.memo(CustomerMessages);

@@ -2,25 +2,16 @@
 
 import api from '../axiosInstance';
 import { CategoryBoutique } from '../types';
+export const getCategories = async (p0: { cacheBust: number; }): Promise<CategoryBoutique[]> => {
+  try {
+    const response = await api.get(`/boutique/category_boutiques/`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    throw error;
+  }
+};
 
-const API_BASE_URL =  'http://localhost:8000';
-export const getCategories = async (): Promise<CategoryBoutique[]> => {
-    try {
-      const response = await api.get(`/boutique/category_boutiques/`);
-      const transformedData = response.data.map((category: CategoryBoutique) => {
-        const transformedCategory = {
-          ...category,
-          image: category.image ? `${API_BASE_URL}${category.image}` : null,
-        };
-        console.log(`Transformed category: ${category.nom}, Image: ${transformedCategory.image}`);
-        return transformedCategory;
-      });
-      return transformedData;
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      throw error;
-    }
-  };
 
 export const getCategory = async (id: number): Promise<CategoryBoutique> => {
   const response = await api.get(`/boutique/category_boutiques/${id}`);

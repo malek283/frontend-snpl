@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import styled from 'styled-components';
@@ -12,7 +13,6 @@ import { CategoryBoutique, Boutique } from '../../types';
 import { useAuthStore } from '../../components/Store/authStore';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-
 
 // Styles (unchanged)
 const Container = styled.div`
@@ -82,11 +82,6 @@ const CategoryName = styled.h3`
   margin-bottom: 0.5rem;
 `;
 
-const CategoryDescription = styled.p`
-  color: #666;
-  font-size: 0.9rem;
-`;
-
 const FormContainer = styled.div`
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: 20px;
@@ -151,7 +146,7 @@ const ErrorMessage = styled.p`
 `;
 
 const ShopCreatorPage = () => {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const [categories, setCategories] = useState<CategoryBoutique[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryBoutique | null>(null);
@@ -162,7 +157,6 @@ const ShopCreatorPage = () => {
     adresse: '',
     telephone: '',
     email: '',
-   
   });
   const [image, setImage] = useState<File | null>(null);
   const [logo, setLogo] = useState<File | null>(null);
@@ -170,15 +164,35 @@ const ShopCreatorPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Fetch categories on component mount
+  // Fetch categories with cache-busting and retry logic
   useEffect(() => {
     const fetchCategories = async () => {
       setLoading(true);
       try {
-        const fetchedCategories = await getCategories();
+        const fetchedCategories = await getCategories({ cacheBust: Date.now() });
+        console.log('Fetched categories:', fetchedCategories);
         setCategories(fetchedCategories);
+        if (fetchedCategories.length === 0) {
+          setError('No categories found. Please try again later.');
+        }
       } catch (err) {
-        setError('Failed to load categories. Please try again.');
+        console.error('Fetch categories error:', err);
+        setError('Failed to load categories. Retrying...');
+        setTimeout(async () => {
+          try {
+            const retryCategories = await getCategories({ cacheBust: Date.now() });
+            console.log('Retry fetched categories:', retryCategories);
+            setCategories(retryCategories);
+            if (retryCategories.length === 0) {
+              setError('No categories found after retry.');
+            } else {
+              setError(null);
+            }
+          } catch (retryErr) {
+            console.error('Retry fetch categories error:', retryErr);
+            setError('Failed to load categories. Please refresh the page.');
+          }
+        }, 2000);
       } finally {
         setLoading(false);
       }
@@ -188,7 +202,7 @@ const ShopCreatorPage = () => {
 
   const handleCategorySelect = (category: CategoryBoutique) => {
     setSelectedCategory(category);
-    setOpenDialog(true); // Open dialog with category pre-selected
+    setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
@@ -199,12 +213,12 @@ const ShopCreatorPage = () => {
       adresse: '',
       telephone: '',
       email: '',
-     
     });
     setImage(null);
+    setLogo(null);
     setError(null);
     setFieldErrors({});
-    setSelectedCategory(null); // Reset category
+    setSelectedCategory(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -223,6 +237,7 @@ const ShopCreatorPage = () => {
       setFieldErrors((prev) => ({ ...prev, image: '' }));
     }
   };
+
   const handleFileChangeLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = e.target;
     if (files && files[0]) {
@@ -230,10 +245,6 @@ const ShopCreatorPage = () => {
       setFieldErrors((prev) => ({ ...prev, logo: '' }));
     }
   };
-  
-  
-
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,14 +252,11 @@ const ShopCreatorPage = () => {
       setError('Please select a category and ensure you are logged in.');
       return;
     }
-  
-    // Validate logo URL
-  
-  
+
     setLoading(true);
     setError(null);
     setFieldErrors({});
-  
+
     try {
       const formData = new FormData();
       formData.append('nom', shopData.nom);
@@ -256,27 +264,25 @@ const ShopCreatorPage = () => {
       if (shopData.adresse) formData.append('adresse', shopData.adresse);
       if (shopData.telephone) formData.append('telephone', shopData.telephone);
       if (shopData.email) formData.append('email', shopData.email);
-      
       formData.append('category_boutique', selectedCategory.id!.toString());
       formData.append('marchand', user.id.toString());
-  
+
       if (logo instanceof File) {
-        formData.append('logo', logo);  // Assurer que l'objet 'image' est bien un fichier
+        formData.append('logo', logo);
       }
       if (image instanceof File) {
-        formData.append('image', image);  // Assurer que l'objet 'image' est bien un fichier
+        formData.append('image', image);
       }
-  
-      // Log FormData for debugging
+
       console.log('Submitting boutique with the following data:');
       console.log('User ID:', user.id);
       console.log('Category ID:', selectedCategory.id);
       for (const [key, value] of formData.entries()) {
         console.log(`${key}: ${value}`);
       }
-  
+
       await createBoutique(formData);
-      toast.success('boutique added successfully!');
+      toast.success('Boutique added successfully!');
       handleCloseDialog();
       navigate('/MerchantDashboard');
     } catch (err: any) {
@@ -296,7 +302,6 @@ const ShopCreatorPage = () => {
       setLoading(false);
     }
   };
-  
 
   return (
     <Container>
@@ -319,18 +324,16 @@ const ShopCreatorPage = () => {
           >
             <CategoryImage>
               <img
-                src={
-                  typeof category.image === 'string'
-                    ? category.image
-                    : category.image
-                    ? URL.createObjectURL(category.image)
-                    : 'https://via.placeholder.com/80'
-                }
+                src={category.image || 'https://via.placeholder.com/80'}
                 alt={category.nom}
+                onError={(e) => {
+                  console.error(`Failed to load image for ${category.nom}: ${category.image}`);
+                  e.currentTarget.src = 'https://via.placeholder.com/80';
+                }}
+                onLoad={() => console.log(`Successfully loaded image for ${category.nom}: ${category.image}`)}
               />
             </CategoryImage>
             <CategoryName>{category.nom}</CategoryName>
-           
           </CategoryCard>
         ))}
       </CategoriesGrid>
@@ -409,14 +412,13 @@ const ShopCreatorPage = () => {
                 </FormGroup>
 
                 <FormGroup>
-                  <Label htmlFor="logo">Logo </Label>
+                  <Label htmlFor="logo">Logo</Label>
                   <Input
                     type="file"
                     id="logo"
                     name="logo"
-                   accept="logo/*"
+                    accept="image/*"
                     onChange={handleFileChangeLogo}
-                   
                   />
                   {fieldErrors.logo && <ErrorMessage>{fieldErrors.logo}</ErrorMessage>}
                 </FormGroup>

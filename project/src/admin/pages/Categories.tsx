@@ -27,7 +27,8 @@ const Categories: React.FC = () => {
     const fetchCategories = async () => {
       setIsLoading(true);
       try {
-        const response = await getCategories();
+        const response = await getCategories({ cacheBust: Date.now() });
+        console.log('Fetched categories:', response);
         setCategories(response);
       } catch (error) {
         toast.error('Failed to load categories');
@@ -77,7 +78,6 @@ const Categories: React.FC = () => {
       toast.success('Category added successfully!');
       resetForm();
       setIsAddModalOpen(false);
-      
     } catch (error) {
       toast.error('Failed to add category');
       console.error('Error adding category:', error);
@@ -91,7 +91,7 @@ const Categories: React.FC = () => {
       nom: category.nom,
       image: category.image || null,
     });
-    setPreviewImage(typeof category.image === 'string' ? category.image : null);
+    setPreviewImage(category.image || null);
     setImageFile(null);
     setIsAddModalOpen(true);
   };
@@ -270,13 +270,14 @@ const Categories: React.FC = () => {
               <div className="relative">
                 {category.image ? (
                   <img
-                    src={category.image instanceof File ? URL.createObjectURL(category.image) : category.image}
+                    src={category.image}
                     alt={category.nom}
                     className="w-full h-48 object-cover"
                     onError={(e) => {
                       console.error(`Failed to load image for ${category.nom}: ${category.image}`);
-                      e.currentTarget.src = 'https://via.placeholder.com/150';
+                      e.currentTarget.src = 'https://placehold.co/150x150';
                     }}
+                    onLoad={() => console.log(`Successfully loaded image for ${category.nom}: ${category.image}`)}
                   />
                 ) : (
                   <div className="w-full h-48 bg-gray-100 flex items-center justify-center">

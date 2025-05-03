@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingBag, 
@@ -21,6 +21,14 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeSection, setActiveSection }) => {
+  useEffect(() => {
+    console.log('Sidebar re-rendered:', { isOpen, activeSection });
+  });
+
+  const handleSectionClick = (section: ActiveSection) => {
+    console.log('Sidebar section clicked:', section);
+    setActiveSection(section);
+  };
   const navigationItems = [
     { id: 'overview', name: 'Vue d\'ensemble', icon: <LayoutDashboard size={20} /> },
     { id: 'products', name: 'Produits', icon: <ShoppingBag size={20} /> },

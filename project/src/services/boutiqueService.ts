@@ -8,6 +8,7 @@ import { Boutique } from "../types";
 
 
 export const createBoutique = async (boutiqueData: FormData): Promise<Boutique> => {
+  console.log('Boutique created:', boutiqueData);
   try {
     const response = await api.post(`boutique/boutiques/`, boutiqueData, {
       headers: {

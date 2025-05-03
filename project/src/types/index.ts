@@ -33,7 +33,7 @@ export interface CategoryBoutique {
 
   id?: number;
   nom: string;
-  image: File | null;
+  image?: string | null;
 
 }
 

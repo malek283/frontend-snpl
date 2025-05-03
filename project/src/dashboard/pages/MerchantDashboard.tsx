@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/dashboard/pages/MerchantDashboard.tsx
+import React, { useState, useEffect, useCallback } from 'react';
 import AccountSettings from '../AccountSettings';
 import CustomerMessages from '../CustomerMessages';
 import Header from '../Header';
@@ -10,8 +11,7 @@ import ProductManagement from '../ProductManagement';
 import StoreManagement from '../StoreManagement';
 import Support from '../Support';
 import { mockMerchant } from '../data/mockData';
-import Sidebar from '../Sidebar';  // ou '../Sidebar' selon votre structure de fichiers
-
+import Sidebar from '../Sidebar';
 
 type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages';
 
@@ -19,18 +19,23 @@ const MerchantDashboard: React.FC = () => {
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  // Memoized callbacks
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen((prev) => !prev);
+  }, []);
 
-  const renderActiveSection = () => {
+  const handleSetActiveSection = useCallback((section: ActiveSection) => {
+    setActiveSection(section);
+  }, []);
+
+  const renderActiveSection = useCallback(() => {
     switch (activeSection) {
       case 'overview':
         return <Overview />;
       case 'products':
         return <ProductManagement />;
       case 'store':
-        return <StoreManagement merchant={mockMerchant} />;
+        return <StoreManagement />;
       case 'orders':
         return <OrderManagement />;
       case 'payments':
@@ -46,22 +51,22 @@ const MerchantDashboard: React.FC = () => {
       default:
         return <Overview />;
     }
-  };
+  }, [activeSection]);
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        activeSection={activeSection} 
-        setActiveSection={setActiveSection}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        activeSection={activeSection}
+        setActiveSection={handleSetActiveSection}
       />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header 
-          toggleSidebar={toggleSidebar} 
+        <Header
+          toggleSidebar={toggleSidebar}
           merchantName={mockMerchant.name}
         />
-        
+
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {renderActiveSection()}
         </main>
@@ -70,4 +75,4 @@ const MerchantDashboard: React.FC = () => {
   );
 };
 
-export default MerchantDashboard;
+export default React.memo(MerchantDashboard);

@@ -82,7 +82,22 @@ export const deleteCategoryProduit = async (id: number): Promise<void> => {
 // Boutique Services
 export const getBoutiques = async (): Promise<Boutique[]> => {
   const response = await api.get<Boutique[]>('boutique/boutiques/');
+  console.log('boutique response:', response.data);
   return response.data;
+};
+
+export const getBoutiquechat = async (boutiqueId?: string): Promise<Boutique[]> => {
+  try {
+    const response = await api.get<Boutique[] | Boutique>('boutique/boutiquechat/', {
+      params: boutiqueId ? { boutique_id: boutiqueId } : {},
+    });
+    console.log('Boutique response:', response.data);
+    // Normalize response to always return an array
+    return Array.isArray(response.data) ? response.data : [response.data];
+  } catch (error) {
+    console.error('Error fetching boutiques:', error);
+    throw error;
+  }
 };
 
 export const updateBoutique = async (id: number, boutiqueData: BoutiqueUpdatePayload): Promise<Boutique> => {

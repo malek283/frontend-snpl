@@ -1,17 +1,10 @@
+# chat/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
-
 from boutique.models import Boutique
 
+
 User = get_user_model()
-
-class Shop(models.Model):
-    id = models.CharField(max_length=255, primary_key=True)
-    name = models.CharField(max_length=255)
-    Marchant = models.ForeignKey(User, on_delete=models.CASCADE, related_name='shops')
-
-    def __str__(self):
-        return self.name
 
 class ChatRoom(models.Model):
     ROOM_TYPES = (
@@ -20,7 +13,7 @@ class ChatRoom(models.Model):
     )
     name = models.CharField(max_length=255, unique=True)
     room_type = models.CharField(max_length=10, choices=ROOM_TYPES, default='shop')
-    shop = models.ForeignKey(Boutique, on_delete=models.CASCADE, null=True, blank=True)
+    boutique = models.ForeignKey(Boutique, on_delete=models.CASCADE, null=True, blank=True)  # Changed from Shop to Boutique
     created_at = models.DateTimeField(auto_now_add=True)
     members = models.ManyToManyField(User, related_name='chat_rooms')
 
@@ -33,7 +26,7 @@ class ChatRoom(models.Model):
 class ChatMessage(models.Model):
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_messages')
-    customer = models.ForeignKey(User, on_delete=models.CASCADE,null=True, related_name='customer_messages')
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, null=True, related_name='customer_messages')
     message = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
     is_edited = models.BooleanField(default=False)
