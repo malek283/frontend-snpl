@@ -150,7 +150,6 @@ const ProductManagement: React.FC<ProductManagementProps> = ({ boutiqueId }) => 
       setLoading(false);
     }
   };
-
   // Handle category form submission
   const handleCategorySubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -383,21 +382,21 @@ const ProductManagement: React.FC<ProductManagementProps> = ({ boutiqueId }) => 
               fullWidth margin="dense" label="Size" name="taille" value={productForm.taille}
               onChange={handleProductFormChange}
             />
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Category</InputLabel>
-              <Select
-                name="category_produit"
-                value={productForm.category_produit}
-                onChange={(e: SelectChangeEvent<string>) => handleProductFormChange(e)}
-                label="Category"
-                required
-              >
-                <MenuItem value="">Select Category</MenuItem>
-                {categories.map((category) => (
-                  <MenuItem key={category.id} value={category.id.toString()}>{category.nom}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+<FormControl fullWidth margin="dense">
+  <InputLabel>Category</InputLabel>
+  <Select
+    name="category_produit"
+    value={productForm.category_produit}
+    onChange={(e: SelectChangeEvent<string>) => handleProductFormChange(e)}
+    label="Category"
+    required
+  >
+    <MenuItem value="">Select Category</MenuItem>
+    {categories.map((category) => (
+      <MenuItem key={category.id} value={category.id.toString()}>{category.nom}</MenuItem>
+    ))}
+  </Select>
+</FormControl>
             <TextField
               fullWidth margin="dense" type="file" name="image" onChange={handleProductFormChange}
               InputLabelProps={{ shrink: true }} label="Image"

@@ -1,7 +1,7 @@
 
 
 import api from '../axiosInstance';
-import { CategoryProduit, Produit, Boutique, ProduitCreatePayload } from '../types';
+import { CategoryProduit, Produit, Boutique, ProduitCreatePayload, BoutiqueUpdatePayload } from '../types';
 
 export const getCategoryProduits = async (boutiqueId?: string): Promise<CategoryProduit[]> => {
   const response = await api.get<CategoryProduit[]>('boutique/category-produits/', {
@@ -90,10 +90,7 @@ export const getBoutiques = async (): Promise<Boutique[]> => {
   return response.data;
 };
 
-export const updateBoutique = async (id: number, payload: any): Promise<Boutique> => {
-  const response = await api.put<Boutique>(`boutique/boutiques/${id}/`, payload);
-  return response.data;
-};
+
 export const getBoutiquechat = async (boutiqueId?: string): Promise<Boutique[]> => {
   try {
     const response = await api.get<Boutique[] | Boutique>('boutique/boutiquechat/', {
@@ -107,3 +104,40 @@ export const getBoutiquechat = async (boutiqueId?: string): Promise<Boutique[]> 
     throw error;
   }
 };
+
+export const updateBoutique = async (id: number, boutiqueData: BoutiqueUpdatePayload): Promise<Boutique> => {
+  const formData = new FormData();
+  Object.entries(boutiqueData).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      formData.append(key, value as string | Blob);
+    }
+  });
+  const response = await api.put<Boutique>(`boutique/boutiques/${id}/`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+export const getBoutiqueDetails = async (boutiqueId: string): Promise<{
+  boutique: Boutique;
+  categories: CategoryProduit[];
+  products: Produit[];
+}> => {
+  try {
+    const response = await api.get(`boutique/boutiques/${boutiqueId}/details/`);
+    
+    // Validation des données reçues
+    if (!response.data || !response.data.boutique) {
+      throw new Error('Données de boutique invalides');
+    }
+    
+    return {
+      boutique: response.data.boutique,
+      categories: response.data.categories || [],
+      products: response.data.products || []
+    };
+  } catch (error) {
+    console.error('Error fetching boutique details:', error);
+    throw error;
+  }
+};
+

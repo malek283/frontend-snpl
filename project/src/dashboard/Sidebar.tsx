@@ -9,7 +9,8 @@ import {
   MessageSquare,
   MessageCircle, 
   Settings, 
-  X 
+  X, 
+  Users
 } from 'lucide-react';
 
 type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages';
@@ -39,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeSection, setActiveSecti
     { id: 'notifications', name: 'Notifications', icon: <Bell size={20} /> },
     { id: 'support', name: 'Support', icon: <MessageSquare size={20} /> },
     { id: 'settings', name: 'Paramètres', icon: <Settings size={20} /> },
+    { id: 'user', name: 'user', icon: <Users size={20} /> },
   ];
 
   return (

@@ -13,6 +13,8 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # Applications
 INSTALLED_APPS = [
+    'users',
+    'boutique', 
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -24,11 +26,11 @@ INSTALLED_APPS = [
     'django_ratelimit',
     'channels',
     'chat',
-    'users',
-    'boutique',
-    'cart',
+    'config',
     'rewards',
-    'config'
+    'cart'
+    
+  
   
 ]
 
@@ -114,7 +116,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
  
-    "http://localhost:5174",
+    "http://localhost:5175",
   
 ]
 CORS_ALLOW_CREDENTIALS = True

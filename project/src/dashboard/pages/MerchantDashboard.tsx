@@ -16,11 +16,12 @@ import PaymentManagement from '../PaymentManagement';
 import ProductManagement from '../ProductManagement';
 import StoreManagement from '../StoreManagement';
 import Sidebar from '../Sidebar';
+import { Users } from 'lucide-react';
 
 
 
 
-type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages';
+type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages' | 'user';
 
 const MerchantDashboard: React.FC = () => {
   const { boutiqueId } = useParams<{ boutiqueId: string }>();
@@ -66,25 +67,27 @@ const MerchantDashboard: React.FC = () => {
     if (!boutiqueId) return null;
     switch (activeSection) {
       case 'overview':
-        return <Overview boutiqueId={boutiqueId} />;
+        return <Overview  />;
       case 'products':
         return <ProductManagement boutiqueId={boutiqueId} />;
       case 'store':
         return <StoreManagement boutiqueId={boutiqueId} />;
       case 'orders':
-        return <OrderManagement boutiqueId={boutiqueId} />;
+        return <OrderManagement />;
       case 'payments':
-        return <PaymentManagement boutiqueId={boutiqueId} />;
+        return <PaymentManagement />;
       case 'notifications':
         return <Notifications />;
       case 'support':
         return <Support />;
       case 'settings':
-        return <AccountSettings boutique={boutique} />;
+        return <AccountSettings merchant={undefined}  />;
       case 'messages':
         return <CustomerMessages />;
+        case 'user':
+          return <Users />;
       default:
-        return <Overview boutiqueId={boutiqueId} />;
+        return <Overview/>;
     }
   }, [activeSection, boutiqueId, boutique]);
 
