@@ -1,38 +1,51 @@
 
+
 import api from '../axiosInstance';
-import { Produit, ProduitCreatePayload, ProduitUpdatePayload, CategoryProduitCreatePayload, CategoryProduitUpdatePayload, Boutique, BoutiqueUpdatePayload, CategoryProduit } from '../types';
+import { CategoryProduit, Produit, Boutique, ProduitCreatePayload } from '../types';
 
-// Produit Services
-export const getProduits = async (categoryProduitId?: string): Promise<Produit[]> => {
-  const params = categoryProduitId ? { category_produit_id: categoryProduitId } : {};
-  const response = await api.get<Produit[]>('boutique/produits/', { params });
+export const getCategoryProduits = async (boutiqueId?: string): Promise<CategoryProduit[]> => {
+  const response = await api.get<CategoryProduit[]>('boutique/category-produits/', {
+    params: { boutique_id: boutiqueId },
+  });
+  console.log('getCategoryProduits response:', response.data);
   return response.data;
 };
 
-export const createProduit = async (produitData: ProduitCreatePayload): Promise<Produit> => {
-  console.log('produitData', produitData)
-  const formData = new FormData();
-  Object.entries(produitData).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      formData.append(key, value as string | Blob);
-    }
+export const getProduits = async (categoryId?: string, boutiqueId?: string): Promise<Produit[]> => {
+  const response = await api.get<Produit[]>('boutique/produits/', {
+    params: { category_produit: categoryId, boutique: boutiqueId },
   });
+  console.log('getProduits response:', response.data);
+  return response.data;
+};
+export const createProduit = async (payload: ProduitCreatePayload): Promise<Produit> => {
+  const formData = new FormData();
+  formData.append('nom', payload.nom);
+  formData.append('description', payload.description);
+  formData.append('prix', payload.prix);
+  formData.append('stock', payload.stock);
+  formData.append('couleur', payload.couleur);
+  formData.append('taille', payload.taille);
+  formData.append('boutique', payload.boutique);
+  formData.append('category_produit', payload.category_produit);
+
+  if (payload.image) {
+    formData.append('image_file', payload.image); // Important : ajouter le fichier
+  }
+
+  for (const [key, value] of formData.entries()) {
+    console.log(`🧾 ${key}:`, value);
+  }
   const response = await api.post<Produit>('boutique/produits/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': 'multipart/form-data' }
   });
+
   return response.data;
 };
 
-export const updateProduit = async (id: number, produitData: ProduitUpdatePayload): Promise<Produit> => {
-  const formData = new FormData();
-  Object.entries(produitData).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      formData.append(key, value as string | Blob);
-    }
-  });
-  const response = await api.put<Produit>(`boutique/produits/${id}/`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+
+export const updateProduit = async (id: number, payload: any): Promise<Produit> => {
+  const response = await api.put<Produit>(`boutique/produits/${id}/`, payload);
   return response.data;
 };
 
@@ -40,53 +53,47 @@ export const deleteProduit = async (id: number): Promise<void> => {
   await api.delete(`boutique/produits/${id}/`);
 };
 
-// CategoryProduit Services
-export const getCategoryProduits = async (): Promise<CategoryProduit[]> => {
-  const response = await api.get<CategoryProduit[]>('boutique/category_produits/');
-  console.log('getCategoryProduits response:', response.data);
+export const createCategoryProduit = async (payload: any): Promise<CategoryProduit> => {
+  const formData = new FormData();
+  formData.append('nom', payload.nom);
+  formData.append('boutique', payload.boutique);
+  if (payload.image) {
+    formData.append('image_file', payload.image); // le champ attendu par le serializer
+  }
+
+  const response = await api.post<CategoryProduit>(
+    'boutique/category-produits/',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+
   return response.data;
 };
 
-export const createCategoryProduit = async (categoryData: CategoryProduitCreatePayload): Promise<CategoryProduit> => {
-  const formData = new FormData();
-  Object.entries(categoryData).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      formData.append(key, value as string | Blob);
-    }
-  });
-  const response = await api.post<CategoryProduit>('boutique/category_produits/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return response.data;
-};
 
-export const updateCategoryProduit = async (
-  id: number,
-  categoryData: CategoryProduitUpdatePayload
-): Promise<CategoryProduit> => {
-  const formData = new FormData();
-  Object.entries(categoryData).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      formData.append(key, value as string | Blob);
-    }
-  });
-  const response = await api.put<CategoryProduit>(`boutique/category_produits/${id}/`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+export const updateCategoryProduit = async (id: number, payload: any): Promise<CategoryProduit> => {
+  const response = await api.put<CategoryProduit>(`boutique/category-produits/${id}/`, payload);
   return response.data;
 };
 
 export const deleteCategoryProduit = async (id: number): Promise<void> => {
-  await api.delete(`boutique/category_produits/${id}/`);
+  await api.delete(`boutique/category-produits/${id}/`);
 };
 
-// Boutique Services
 export const getBoutiques = async (): Promise<Boutique[]> => {
   const response = await api.get<Boutique[]>('boutique/boutiques/');
-  console.log('boutique response:', response.data);
+  console.log('getBoutiques response:', response.data);
   return response.data;
 };
 
+export const updateBoutique = async (id: number, payload: any): Promise<Boutique> => {
+  const response = await api.put<Boutique>(`boutique/boutiques/${id}/`, payload);
+  return response.data;
+};
 export const getBoutiquechat = async (boutiqueId?: string): Promise<Boutique[]> => {
   try {
     const response = await api.get<Boutique[] | Boutique>('boutique/boutiquechat/', {
@@ -99,17 +106,4 @@ export const getBoutiquechat = async (boutiqueId?: string): Promise<Boutique[]> 
     console.error('Error fetching boutiques:', error);
     throw error;
   }
-};
-
-export const updateBoutique = async (id: number, boutiqueData: BoutiqueUpdatePayload): Promise<Boutique> => {
-  const formData = new FormData();
-  Object.entries(boutiqueData).forEach(([key, value]) => {
-    if (value !== null && value !== undefined) {
-      formData.append(key, value as string | Blob);
-    }
-  });
-  const response = await api.put<Boutique>(`boutique/boutiques/${id}/`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return response.data;
 };

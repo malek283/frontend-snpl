@@ -1,5 +1,11 @@
-// src/dashboard/pages/MerchantDashboard.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Box, Alert, Container } from '@mui/material';
+import { Support } from '@mui/icons-material';
+
+import { getBoutiques } from '../../services/productproduitservice';
+import { Boutique } from '../../types';
 import AccountSettings from '../AccountSettings';
 import CustomerMessages from '../CustomerMessages';
 import Header from '../Header';
@@ -9,15 +15,43 @@ import Overview from '../Overview';
 import PaymentManagement from '../PaymentManagement';
 import ProductManagement from '../ProductManagement';
 import StoreManagement from '../StoreManagement';
-import Support from '../Support';
-import { mockMerchant } from '../data/mockData';
 import Sidebar from '../Sidebar';
+
+
+
 
 type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages';
 
 const MerchantDashboard: React.FC = () => {
+  const { boutiqueId } = useParams<{ boutiqueId: string }>();
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [boutique, setBoutique] = useState<Boutique | null>(null);
+  const [error, setError] = useState<string>('');
+
+  // Fetch boutique details
+  useEffect(() => {
+    const fetchBoutique = async () => {
+      if (!boutiqueId) {
+        setError('No boutique ID provided.');
+        return;
+      }
+      try {
+        const boutiques = await getBoutiques();
+        const selectedBoutique = boutiques.find((b) => b.id.toString() === boutiqueId);
+        if (!selectedBoutique) {
+          setError('Boutique not found.');
+          return;
+        }
+        setBoutique(selectedBoutique);
+      } catch (err) {
+        setError('Failed to fetch boutique details.');
+        console.error('Fetch error:', err);
+      }
+    };
+    fetchBoutique();
+  }, [boutiqueId]);
 
   // Memoized callbacks
   const toggleSidebar = useCallback(() => {
@@ -29,49 +63,58 @@ const MerchantDashboard: React.FC = () => {
   }, []);
 
   const renderActiveSection = useCallback(() => {
+    if (!boutiqueId) return null;
     switch (activeSection) {
       case 'overview':
-        return <Overview />;
+        return <Overview boutiqueId={boutiqueId} />;
       case 'products':
-        return <ProductManagement />;
+        return <ProductManagement boutiqueId={boutiqueId} />;
       case 'store':
-        return <StoreManagement />;
+        return <StoreManagement boutiqueId={boutiqueId} />;
       case 'orders':
-        return <OrderManagement />;
+        return <OrderManagement boutiqueId={boutiqueId} />;
       case 'payments':
-        return <PaymentManagement />;
+        return <PaymentManagement boutiqueId={boutiqueId} />;
       case 'notifications':
         return <Notifications />;
       case 'support':
         return <Support />;
       case 'settings':
-        return <AccountSettings merchant={mockMerchant} />;
+        return <AccountSettings boutique={boutique} />;
       case 'messages':
         return <CustomerMessages />;
       default:
-        return <Overview />;
+        return <Overview boutiqueId={boutiqueId} />;
     }
-  }, [activeSection]);
+  }, [activeSection, boutiqueId, boutique]);
+
+  if (error) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Alert severity="error">{error}</Alert>
+      </Container>
+    );
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'grey.50' }}>
       <Sidebar
         isOpen={isSidebarOpen}
         activeSection={activeSection}
         setActiveSection={handleSetActiveSection}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header
           toggleSidebar={toggleSidebar}
-          merchantName={mockMerchant.name}
+          boutiqueName={boutique?.nom || 'Merchant Dashboard'}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <Box component="main" sx={{ flex: 1, overflowY: 'auto', p: { xs: 2, md: 4 } }}>
           {renderActiveSection()}
-        </main>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

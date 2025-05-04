@@ -1,7 +1,9 @@
 # chat/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
+
 from boutique.models import Boutique
+
 
 
 User = get_user_model()

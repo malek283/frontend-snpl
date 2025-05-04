@@ -1,10 +1,7 @@
-// src/dashboard/CustomerMessages.tsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-
 import { MessageSquare, Search, Edit2, Trash2, Pin, Heart } from 'lucide-react';
 import { useAuthStore } from '../components/Store/authStore';
-import { getBoutiquechat } from '../services/productproduitservice';
 
 // Interfaces (unchanged)
 interface ChatMessage {
@@ -51,13 +48,6 @@ interface User {
   is_staff: boolean;
 }
 
-interface Boutique {
-  id: number;
-  name: string;
-  marchand: number;
-  created_at: string;
-}
-
 const roleMap: Record<User['role'], 'customer' | 'merchant' | 'admin'> = {
   client: 'customer',
   marchand: 'merchant',
@@ -84,7 +74,7 @@ const computeRoomDetails = (
     if (!boutiqueId) {
       return { roomName: '', roomType: 'shop', error: 'ID de boutique manquant pour le marchand' };
     }
-    roomName = `shop_${boutiqueId}`; // e.g., shop_29
+    roomName = `shop_${boutiqueId}`;
   } else if (serverRole === 'admin') {
     roomType = 'admin';
     roomName = `admin_${userId}`;
@@ -93,7 +83,7 @@ const computeRoomDetails = (
     if (!boutiqueId) {
       return { roomName: '', roomType: 'shop', error: 'ID de boutique manquant pour le client' };
     }
-    roomName = `shop_${boutiqueId}`; // e.g., shop_29
+    roomName = `shop_${boutiqueId}`;
   } else {
     return { roomName: '', roomType: 'shop', error: 'Rôle utilisateur invalide' };
   }
@@ -103,90 +93,54 @@ const computeRoomDetails = (
 
 const CustomerMessages: React.FC = () => {
   // State
-  const { accessToken, user } = useAuthStore((state) => ({
+  const { accessToken, userId, userRole } = useAuthStore((state) => ({
     accessToken: state.accessToken,
-    user: state.user as User | null
+    userId: state.user?.id ?? '',
+    userRole: state.user?.role ?? undefined,
   }));
 
   const { boutiqueId: paramBoutiqueId } = useParams<{ boutiqueId: string }>();
   const [roomName, setRoomName] = useState<string>('');
   const [roomType, setRoomType] = useState<'shop' | 'admin'>('shop');
-  const [boutiqueId, setBoutiqueId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isBoutiqueFetched, setIsBoutiqueFetched] = useState(false);
 
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 3;
 
-  // Memoize user properties
-  const userId = useMemo(() => user?.id, [user]);
-  const userRole = useMemo(() => user?.role, [user]);
+  // Stabilize boutiqueId
+  const boutiqueId = useMemo(() => paramBoutiqueId || null, [paramBoutiqueId]);
 
-  // Memoize room details computation
+  // Compute room details with stable dependencies
   const roomDetails = useMemo(() => {
-    if (!boutiqueId || !userId || !userRole) return null;
-    return computeRoomDetails(userId, userRole, boutiqueId);
-  }, [boutiqueId, userId, userRole]);
+    if (!userId || !userRole) {
+      return { roomName: '', roomType: 'shop' as const, error: 'Utilisateur non authentifié' };
+    }
+    return computeRoomDetails(userId, userRole, boutiqueId ? String(boutiqueId) : undefined);
+  }, [userId, userRole, boutiqueId]);
 
-  // Effect for room details
+  // Update room details only when necessary
   useEffect(() => {
     if (!roomDetails) return;
-    setRoomName(roomDetails.roomName);
-    setRoomType(roomDetails.roomType);
-    setError(roomDetails.error);
+    setRoomName((prev) => (prev !== roomDetails.roomName ? roomDetails.roomName : prev));
+    setRoomType((prev) => (prev !== roomDetails.roomType ? roomDetails.roomType : prev));
+    setError((prev) => (prev !== roomDetails.error ? roomDetails.error : prev));
   }, [roomDetails]);
-
-  // Fetch boutique ID
-  useEffect(() => {
-    if (!userId || !userRole || isBoutiqueFetched) return;
-
-    const fetchBoutiqueId = async () => {
-      try {
-        const boutiques = await getBoutiquechat(userRole === 'client' ? paramBoutiqueId : undefined);
-        let selectedBoutiqueId: string | null = null;
-
-        if (userRole === 'marchand') {
-          if (boutiques.length === 0) {
-            throw new Error('Aucune boutique trouvée pour ce marchand');
-          }
-          selectedBoutiqueId = boutiques[0].id.toString();
-        } else if (userRole === 'client' && paramBoutiqueId) {
-          const boutique = boutiques.find((b: { id: number }) =>
-            b.id.toString() === paramBoutiqueId
-          );
-          if (!boutique) {
-            throw new Error('Boutique non trouvée pour cet ID');
-          }
-          selectedBoutiqueId = boutique.id.toString();
-        } else {
-          throw new Error('Contexte de boutique invalide');
-        }
-
-        setBoutiqueId(selectedBoutiqueId);
-        setIsBoutiqueFetched(true);
-      } catch (err) {
-        console.error('Failed to fetch boutique ID:', err);
-        setError('Impossible de charger la boutique');
-        setIsBoutiqueFetched(true);
-      }
-    };
-
-    fetchBoutiqueId();
-  }, [userId, userRole, paramBoutiqueId, isBoutiqueFetched]);
 
   // WebSocket connection setup
   useEffect(() => {
-    if (!accessToken || !roomName || !isBoutiqueFetched) {
+    if (!accessToken || !roomName || (!boutiqueId && roomType === 'shop') || (roomType === 'admin' && userRole !== 'admin')) {
       if (!accessToken) setError('Jeton d\'authentification manquant');
       if (!roomName) setError('Nom de salle manquant');
+      if (!boutiqueId && roomType === 'shop') setError('ID de boutique manquant');
+      if (roomType === 'admin' && userRole?.toLowerCase() !== 'admin') setError('Accès non autorisé pour les non-admins');
       return;
     }
 
@@ -196,39 +150,44 @@ const CustomerMessages: React.FC = () => {
         return;
       }
 
-      // Ajout des paramètres de rôle et boutique pour la validation côté serveur
-      const wsUrl = `ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}&role=${userRole}&boutique_id=${boutiqueId}`;
+      const wsUrl = `ws://localhost:8000/ws/chat/${roomName}/?token=${accessToken}&role=${userRole}&boutique_id=${boutiqueId || ''}`;
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
         setError(null);
         reconnectAttempts.current = 0;
-        
-        // Envoi des informations de connexion
-        ws.current?.send(JSON.stringify({
-          type: 'connect',
-          role: userRole,
-          boutique_id: boutiqueId,
-          user_id: userId
-        }));
 
-        // Récupération des messages et membres selon le rôle
+        ws.current?.send(
+          JSON.stringify({
+            type: 'connect',
+            role: userRole,
+            boutique_id: boutiqueId,
+            user_id: userId,
+          })
+        );
+
         if (roomType === 'shop') {
-          ws.current?.send(JSON.stringify({ 
-            type: 'get_customers',
-            boutique_id: boutiqueId
-          }));
+          ws.current?.send(
+            JSON.stringify({
+              type: 'get_customers',
+              boutique_id: boutiqueId,
+            })
+          );
         } else {
-          ws.current?.send(JSON.stringify({ 
-            type: 'get_members',
-            boutique_id: boutiqueId
-          }));
+          ws.current?.send(
+            JSON.stringify({
+              type: 'get_members',
+              boutique_id: boutiqueId,
+            })
+          );
         }
-        
-        ws.current?.send(JSON.stringify({ 
-          type: 'get_notifications',
-          boutique_id: boutiqueId
-        }));
+
+        ws.current?.send(
+          JSON.stringify({
+            type: 'get_notifications',
+            boutique_id: boutiqueId,
+          })
+        );
       };
 
       ws.current.onmessage = (event) => {
@@ -242,7 +201,6 @@ const CustomerMessages: React.FC = () => {
             }
             break;
           case 'chat_message':
-            // Vérification que le message est pour la bonne boutique
             if (data.boutique_id === boutiqueId) {
               setMessages((prev) => [
                 ...prev,
@@ -253,7 +211,7 @@ const CustomerMessages: React.FC = () => {
                   senderId: data.sender_id,
                   content: data.message,
                   date: data.time,
-                  isFromMerchant: userRole === 'marchand' && data.sender_id === userId,
+                  isFromMerchant: userRole?.toLowerCase() === 'marchand' && data.sender_id === userId,
                   hasEarlyPaymentReward: data.message.includes('EARLY10'),
                   isEdited: data.is_edited || false,
                   isDeleted: data.is_deleted || false,
@@ -369,7 +327,7 @@ const CustomerMessages: React.FC = () => {
         reconnectTimeout.current = null;
       }
     };
-  }, [accessToken, roomName, roomType, isBoutiqueFetched, boutiqueId, userRole, userId]);
+  }, [accessToken, roomName, roomType, boutiqueId, userRole, userId]);
 
   // Message and notification handlers (unchanged)
   const handleSendMessage = useCallback(

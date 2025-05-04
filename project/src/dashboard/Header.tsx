@@ -80,7 +80,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, merchantName }) => {
               className="flex items-center focus:outline-none"
             >
               <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                {merchantName.charAt(0)}
+             
               </div>
             </button>
             

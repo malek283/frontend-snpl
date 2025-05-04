@@ -1,6 +1,8 @@
 from django.utils import timezone
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('role', 'admin')
 
         if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
+            ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
 
@@ -66,12 +68,11 @@ class Client(models.Model):
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
-       
         primary_key=True,
         related_name='client_profile'
     )
-    solde_points = models.IntegerField(default=0)
-    historique_achats = models.TextField(blank=True, default='')
+    solde_points = models.IntegerField(default=0 ,null=True)
+    historique_achats = models.TextField(blank=True, default='', null=True )
 
     class Meta:
         db_table = 'clients'
@@ -82,7 +83,6 @@ class Client(models.Model):
 class Marchand(models.Model):
     user = models.OneToOneField(
         User,
-        
         on_delete=models.CASCADE,
         primary_key=True,
         related_name='marchand_profile'
@@ -98,7 +98,6 @@ class Marchand(models.Model):
 class Admin(models.Model):
     user = models.OneToOneField(
         User,
-     
         on_delete=models.CASCADE,
         primary_key=True,
         related_name='admin_profile'
@@ -109,3 +108,16 @@ class Admin(models.Model):
 
     def __str__(self):
         return f"Admin: {self.user.prenom} {self.user.nom}"
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        if instance.role == 'client':
+            Client.objects.create(user=instance)
+            logger.debug(f"Created Client profile for user: {instance.email}")
+        elif instance.role == 'marchand':
+            Marchand.objects.create(user=instance)
+            logger.debug(f"Created Marchand profile for user: {instance.email}")
+        elif instance.role == 'admin':
+            Admin.objects.create(user=instance)
+            logger.debug(f"Created Admin profile for user: {instance.email}")

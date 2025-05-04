@@ -3,6 +3,13 @@ from django.db import models
 from django.core.validators import validate_email
 from django.utils.translation import gettext_lazy as _
 
+from users.models import User
+
+
+
+
+
+
 # Catégorie de Boutique
 class CategoryBoutique(models.Model):
     nom = models.CharField(max_length=255, verbose_name=_("Nom"))
@@ -106,3 +113,19 @@ class Produit(models.Model):
 
     def __str__(self):
         return self.nom
+    
+class Echange(models.Model):
+    boutique = models.ForeignKey(Boutique, on_delete=models.CASCADE, related_name='echanges')
+    utilisateur = models.ForeignKey(User, on_delete=models.CASCADE, related_name='echanges')
+    montant = models.DecimalField(max_digits=10, decimal_places=2, verbose_name=_("Montant"))
+    date = models.DateTimeField(auto_now_add=True, verbose_name=_("Date"))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Mis à jour le"))
+
+    class Meta:
+        verbose_name = _("Échange")
+        verbose_name_plural = _("Échanges")
+        db_table = 'echanges'
+
+    def __str__(self):
+        return f"Échange de {self.montant} avec {self.utilisateur.email} (Boutique: {self.boutique.nom})"

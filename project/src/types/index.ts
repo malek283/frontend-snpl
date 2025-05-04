@@ -4,9 +4,10 @@ export interface UserSignupData {
   prenom: string;
   telephone: string;
   adresse: string;
-  role: 'Client' | 'Marchand' | 'Admin';
+  role: string;
   password: string;
   confirm_password: string;
+  
 }
 
 export interface UserLoginData {
@@ -127,7 +128,7 @@ export interface Marchand {
 export interface CategoryProduit {
   id: number;
   nom: string;
-  image: string | null;
+  image: File | null;
   boutique: string; // Boutique ID
   boutique_details: Boutique;
   created_at: string;
@@ -154,12 +155,12 @@ export interface Produit {
 // API payload interfaces
 export interface ProduitCreatePayload {
   nom: string;
-  description?: string;
+  description: string;
   prix: string;
   stock: string;
-  couleur?: string;
-  taille?: string;
-  image?: File | null;
+  couleur: string;
+  taille: string;
+  image: File | null;
   category_produit: string;
   boutique: string;
 }
@@ -195,7 +196,7 @@ export interface BoutiqueUpdatePayload {
   adresse?: string;
   telephone?: string;
   email?: string;
-  image?: File | null;
+  image?: string | null;
   category_boutique?: string;
 }
 

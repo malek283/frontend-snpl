@@ -26,6 +26,10 @@ INSTALLED_APPS = [
     'chat',
     'users',
     'boutique',
+    'cart',
+    'rewards',
+    'config'
+  
 ]
 
 # Middleware
@@ -108,7 +112,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS
 CORS_ALLOWED_ORIGINS = [
- 
+    "http://localhost:5173",
  
     "http://localhost:5174",
   

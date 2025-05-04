@@ -91,7 +91,7 @@ class AdminSerializer(serializers.ModelSerializer):
         model = Admin
         fields = []
 class SignupSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
     
     class Meta:
@@ -100,11 +100,7 @@ class SignupSerializer(serializers.ModelSerializer):
             'email', 'nom', 'prenom', 'telephone', 'adresse', 'role',
             'password', 'confirm_password'
         ]
-        extra_kwargs = {
-            'role': {'default': 'client'},
-            'adresse': {'required': False, 'allow_null': True}
-        }
-
+      
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Les mots de passe ne correspondent pas."})
@@ -127,14 +123,13 @@ class SignupSerializer(serializers.ModelSerializer):
             
             # Création de l'utilisateur
             user = User.objects.create_user(**validated_data)
-            
-            # Création du profil spécifique
-            if role == 'client':
-                Client.objects.create(user=user)
-            elif role == 'marchand':
-                Marchand.objects.create(user=user)
-            elif role == 'admin':
-                Admin.objects.create(user=user)
+          
+            if role == 'client' and not hasattr(user, 'client_profile'):
+              Client.objects.create(user=user)
+            elif role == 'marchand' and not hasattr(user, 'marchand_profile'):
+              Marchand.objects.create(user=user)
+            elif role == 'admin' and not hasattr(user, 'admin_profile'):
+              Admin.objects.create(user=user)
             
             # Recharge l'utilisateur pour s'assurer d'avoir les dernières données
             user.refresh_from_db()

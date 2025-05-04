@@ -81,7 +81,6 @@ def boutique_list_create(request):
             )
 
         logger.debug(f"POST request.data: {request.data}, request.FILES: {request.FILES}")
-
         serializer = BoutiqueSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
@@ -97,7 +96,20 @@ def boutique_list_create(request):
         logger.error(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def boutique_detail(request, boutique_id):
+    try:
+        boutique = Boutique.objects.get(id=boutique_id, marchand__user=request.user)
+        serializer = BoutiqueSerializer(boutique, context={'request': request})
+        response = Response(serializer.data)
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+    except Boutique.DoesNotExist:
+        return Response(
+            {'error': 'Boutique not found or you do not have permission to access it'},
+            status=status.HTTP_404_NOT_FOUND
+        )
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def boutique_retrieve_update_destroy(request, pk):
@@ -303,7 +315,6 @@ def category_boutique_detail(request, pk):
     elif request.method == 'DELETE':
         category_boutique.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def category_produit_list_create(request):
@@ -321,7 +332,11 @@ def category_produit_list_create(request):
         )
 
     if request.method == 'GET':
-        categories_produit = CategoryProduit.objects.filter(boutique__marchand=marchand)
+        boutique_id = request.query_params.get('boutique_id')
+        if boutique_id:
+            categories_produit = CategoryProduit.objects.filter(boutique__id=boutique_id, boutique__marchand=marchand)
+        else:
+            categories_produit = CategoryProduit.objects.filter(boutique__marchand=marchand)
         serializer = CategoryProduitSerializer(categories_produit, many=True, context={'request': request})
         logger.debug(f"GET CategoryProduit response data: {serializer.data}")
         response = Response(serializer.data)
@@ -329,21 +344,20 @@ def category_produit_list_create(request):
         return response
 
     elif request.method == 'POST':
-        data = request.data.copy()
-        logger.debug(f"POST request.data: {request.data}, request.FILES: {request.FILES}")
-        if 'image' in request.FILES:
-            data['image_file'] = request.FILES['image']
-            logger.debug(f"Assigned image_file: {data['image_file']}")
-        serializer = CategoryProduitSerializer(data=data, context={'request': request})
+        # ✅ Extraire ou valider l’objet boutique directement
+        boutique_id = request.data.get('boutique')
+        try:
+            boutique = Boutique.objects.get(id=boutique_id, marchand=marchand)
+        except Boutique.DoesNotExist:
+            return Response({'error': 'Boutique not found or not owned by this merchant'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ✅ Créer l’objet CategoryProduit en injectant `boutique`
+        serializer = CategoryProduitSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            category_produit = serializer.save()
-            response_data = CategoryProduitSerializer(category_produit, context={'request': request}).data
-            logger.debug(f"Created CategoryProduit: {category_produit.nom}, image: {category_produit.image}, response: {response_data}")
-            response = Response(response_data, status=status.HTTP_201_CREATED)
-            response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-            return response
-        logger.error(f"Serializer errors: {serializer.errors}")
+            serializer.save(boutique=boutique)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])

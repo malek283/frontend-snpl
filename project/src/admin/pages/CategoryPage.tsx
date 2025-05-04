@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import styled from 'styled-components';
@@ -13,13 +12,21 @@ import { CategoryBoutique, Boutique } from '../../types';
 import { useAuthStore } from '../../components/Store/authStore';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { getBoutiques } from '../../services/productproduitservice';
 
-// Styles (unchanged)
+// Styles
 const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
   font-family: 'Poppins', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+`;
+
+const Section = styled.div`
+  flex: 1;
 `;
 
 const Title = styled.h1`
@@ -36,7 +43,12 @@ const CategoriesGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 3rem;
+`;
+
+const BoutiquesGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
 `;
 
 const CategoryCard = styled(motion.div)`
@@ -59,6 +71,26 @@ const CategoryCard = styled(motion.div)`
   }
 `;
 
+const BoutiqueCard = styled(motion.div)`
+  background: white;
+  border-radius: 15px;
+  padding: 1.5rem;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+  text-align: center;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+    border-color: #4a00e0;
+  }
+`;
+
 const CategoryImage = styled.div`
   width: 80px;
   height: 80px;
@@ -76,7 +108,30 @@ const CategoryImage = styled.div`
   }
 `;
 
+const BoutiqueImage = styled.div`
+  width: 80px;
+  height: 80px;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`;
+
 const CategoryName = styled.h3`
+  font-size: 1.2rem;
+  color: #333;
+  margin-bottom: 0.5rem;
+`;
+
+const BoutiqueName = styled.h3`
   font-size: 1.2rem;
   color: #333;
   margin-bottom: 0.5rem;
@@ -149,6 +204,7 @@ const ShopCreatorPage = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const [categories, setCategories] = useState<CategoryBoutique[]>([]);
+  const [boutiques, setBoutiques] = useState<Boutique[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryBoutique | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [shopData, setShopData] = useState({
@@ -164,41 +220,43 @@ const ShopCreatorPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Fetch categories with cache-busting and retry logic
+  // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
       setLoading(true);
       try {
         const fetchedCategories = await getCategories({ cacheBust: Date.now() });
-        console.log('Fetched categories:', fetchedCategories);
         setCategories(fetchedCategories);
         if (fetchedCategories.length === 0) {
           setError('No categories found. Please try again later.');
         }
       } catch (err) {
-        console.error('Fetch categories error:', err);
-        setError('Failed to load categories. Retrying...');
-        setTimeout(async () => {
-          try {
-            const retryCategories = await getCategories({ cacheBust: Date.now() });
-            console.log('Retry fetched categories:', retryCategories);
-            setCategories(retryCategories);
-            if (retryCategories.length === 0) {
-              setError('No categories found after retry.');
-            } else {
-              setError(null);
-            }
-          } catch (retryErr) {
-            console.error('Retry fetch categories error:', retryErr);
-            setError('Failed to load categories. Please refresh the page.');
-          }
-        }, 2000);
+        setError('Failed to load categories. Please refresh the page.');
       } finally {
         setLoading(false);
       }
     };
     fetchCategories();
   }, []);
+
+  // Fetch user boutiques
+  useEffect(() => {
+    const fetchUserBoutiques = async () => {
+      if (!isAuthenticated || !user?.id) return;
+      setLoading(true);
+      try {
+        const fetchedBoutiques = await getBoutiques(); // Changed to getUserBoutiques
+        console.log('Fetched boutiques:', fetchedBoutiques);
+        setBoutiques(fetchedBoutiques);
+      } catch (err) {
+        console.error('Fetch boutiques error:', err);
+        setError('Failed to load boutiques.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUserBoutiques();
+  }, [isAuthenticated, user?.id]);
 
   const handleCategorySelect = (category: CategoryBoutique) => {
     setSelectedCategory(category);
@@ -274,19 +332,11 @@ const ShopCreatorPage = () => {
         formData.append('image_input', image);
       }
 
-      console.log('Submitting boutique with the following data:');
-      console.log('User ID:', user.id);
-      console.log('Category ID:', selectedCategory.id);
-      for (const [key, value] of formData.entries()) {
-        console.log(`${key}: ${value}`);
-      }
-
-      await createBoutique(formData);
+      const newBoutique = await createBoutique(formData);
       toast.success('Boutique added successfully!');
+      setBoutiques((prev) => [...prev, newBoutique]);
       handleCloseDialog();
-      navigate('/MerchantDashboard');
     } catch (err: any) {
-      console.error('Submit error:', err);
       if (err.response?.data) {
         const errors = err.response.data;
         const newFieldErrors: Record<string, string> = {};
@@ -303,41 +353,76 @@ const ShopCreatorPage = () => {
     }
   };
 
+  const handleBoutiqueClick = (boutiqueId: number) => {
+    navigate(`/MerchantDashboard/${boutiqueId}`);
+  };
+
   return (
     <Container>
-      <Title>Créez Votre Boutique en Ligne</Title>
+      {/* Top Half: Categories */}
+      <Section>
+        <Title>Créez Votre Boutique en Ligne</Title>
+        <h2 style={{ textAlign: 'center', color: '#555', marginBottom: '2rem' }}>
+          Choisissez une catégorie pour votre boutique
+        </h2>
+        {loading && <p>Loading categories...</p>}
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+        <CategoriesGrid>
+          {categories.map((category) => (
+            <CategoryCard
+              key={category.id}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleCategorySelect(category)}
+            >
+              <CategoryImage>
+                <img
+                  src={category.image || 'https://via.placeholder.com/80'}
+                  alt={category.nom}
+                  onError={(e) => {
+                    e.currentTarget.src = 'https://via.placeholder.com/80';
+                  }}
+                />
+              </CategoryImage>
+              <CategoryName>{category.nom}</CategoryName>
+            </CategoryCard>
+          ))}
+        </CategoriesGrid>
+      </Section>
 
-      <h2 style={{ textAlign: 'center', color: '#555', marginBottom: '2rem' }}>
-        Choisissez une catégorie pour votre boutique
-      </h2>
+      {/* Bottom Half: User Boutiques */}
+      <Section>
+        <Title>Vos Boutiques</Title>
+        {boutiques.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#555' }}>
+            Vous n'avez pas encore créé de boutiques.
+          </p>
+        ) : (
+          <BoutiquesGrid>
+            {boutiques.map((boutique) => (
+              <BoutiqueCard
+                key={boutique.id}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleBoutiqueClick(boutique.id)}
+              >
+                <BoutiqueImage>
+                  <img
+                    src={boutique.logo || 'https://via.placeholder.com/80'}
+                    alt={boutique.nom}
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://via.placeholder.com/80';
+                    }}
+                  />
+                </BoutiqueImage>
+                <BoutiqueName>{boutique.nom}</BoutiqueName>
+              </BoutiqueCard>
+            ))}
+          </BoutiquesGrid>
+        )}
+      </Section>
 
-      {loading && <p>Loading categories...</p>}
-      {error && <ErrorMessage>{error}</ErrorMessage>}
-
-      <CategoriesGrid>
-        {categories.map((category) => (
-          <CategoryCard
-            key={category.id}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => handleCategorySelect(category)}
-          >
-            <CategoryImage>
-              <img
-                src={category.image || 'https://via.placeholder.com/80'}
-                alt={category.nom}
-                onError={(e) => {
-                  console.error(`Failed to load image for ${category.nom}: ${category.image}`);
-                  e.currentTarget.src = 'https://via.placeholder.com/80';
-                }}
-                onLoad={() => console.log(`Successfully loaded image for ${category.nom}: ${category.image}`)}
-              />
-            </CategoryImage>
-            <CategoryName>{category.nom}</CategoryName>
-          </CategoryCard>
-        ))}
-      </CategoriesGrid>
-
+      {/* Dialog for creating boutique */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle style={{ textAlign: 'center', color: '#4a00e0' }}>
           Créer une boutique {selectedCategory?.nom}

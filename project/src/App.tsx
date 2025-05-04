@@ -40,7 +40,9 @@ function App() {
               <Route path="checkout" element={<CheckoutPage />} />
               <Route path="login" element={<LoginPage />} />
               <Route path="register" element={<RegisterPage />} />
-              <Route path="MerchantDashboard" element={<MerchantDashboard />} />
+             
+              <Route path="/gigs" element={<ShopCreatorPage />} />
+              <Route path="/MerchantDashboard/:boutiqueId" element={<MerchantDashboard />} />
               <Route path="AdminDashboard" element={<AdminDashboard />} />
               <Route path="ShopCreatorPage" element={<ShopCreatorPage />} />
 

@@ -12,7 +12,7 @@ interface FormState {
   email: string;
   telephone: string;
   adresse: string;
-  role: 'Client' | 'Marchand' | 'Admin';
+  role: 'client' | 'marchand' | 'admin';
   password: string;
   confirm_password: string;
   showPassword: boolean;
@@ -26,7 +26,7 @@ const RegisterPage = () => {
     email: '',
     telephone: '',
     adresse: '',
-    role: 'Client',
+    role: 'client',
     password: '',
     confirm_password: '',
     showPassword: false,
@@ -89,6 +89,7 @@ const RegisterPage = () => {
 
     try {
       setIsLoading(true);
+      console.log('ooooooooo',userData)
       await register(userData);
       toast.success('Inscription réussie!');
       navigate('/login');

@@ -63,11 +63,9 @@ const handleSubmit = async (e: FormEvent) => {
         navigate('/AdminDashboard');
         break;
       case 'marchand':
-        if (response.user.has_boutique) {
-          navigate('/MerchantDashboard');
-        } else {
+
           navigate('/ShopCreatorPage');
-        }
+   
         break;
       case 'client':
         navigate('/HomePage');

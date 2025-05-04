@@ -1,11 +1,17 @@
+
 import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import { getBoutiques, updateBoutique } from '../services/productproduitservice';
 import { Boutique, BoutiqueUpdatePayload } from '../types';
-import { Edit, Building, UploadCloud } from 'lucide-react'; // Added icons for first component's UI
+import { Edit, Building, UploadCloud } from 'lucide-react';
+import { Box, Typography, Button, TextField, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 
-const StoreManagement: React.FC = () => {
+interface StoreManagementProps {
+  boutiqueId: string;
+}
+
+const StoreManagement: React.FC<StoreManagementProps> = ({ boutiqueId }) => {
   const [boutique, setBoutique] = useState<Boutique | null>(null);
-  const [isEditing, setIsEditing] = useState(false); // Added for toggling edit mode
+  const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     storeName: '',
     description: '',
@@ -19,34 +25,35 @@ const StoreManagement: React.FC = () => {
   });
   const [error, setError] = useState<string>('');
 
-  // Placeholder for categories (replace with actual data if available)
   const categories = ['Fashion', 'Electronics', 'Home', 'Beauty', 'Sports'];
 
   useEffect(() => {
     const fetchBoutique = async () => {
       try {
         const boutiques = await getBoutiques();
-        if (boutiques.length > 0) {
-          const boutiqueData = boutiques[0];
-          setBoutique(boutiqueData);
-          setFormData({
-            storeName: boutiqueData.nom || '',
-            description: boutiqueData.description || '',
-            logo: typeof boutiqueData.logo === 'string' ? boutiqueData.logo : '',
-            coverImage: typeof boutiqueData.image === 'string' ? boutiqueData.image : boutiqueData.image ? URL.createObjectURL(boutiqueData.image) : '',
-            category: boutiqueData.category_boutique ? String(boutiqueData.category_boutique) : '',
-            address: boutiqueData.adresse || '',
-            phone: boutiqueData.telephone || '',
-            email: boutiqueData.email || '',
-            website: boutiqueData.website || '',
-          });
+        const boutiqueData = boutiques.find((b) => b.id.toString() === boutiqueId);
+        if (!boutiqueData) {
+          setError('Boutique not found.');
+          return;
         }
+        setBoutique(boutiqueData);
+        setFormData({
+          storeName: boutiqueData.nom || '',
+          description: boutiqueData.description || '',
+          logo: typeof boutiqueData.logo === 'string' ? boutiqueData.logo : '',
+          coverImage: typeof boutiqueData.image === 'string' ? boutiqueData.image : '',
+          category: boutiqueData.category_boutique ? String(boutiqueData.category_boutique) : '',
+          address: boutiqueData.adresse || '',
+          phone: boutiqueData.telephone || '',
+          email: boutiqueData.email || '',
+          
+        });
       } catch (err) {
-        setError('Failed to fetch boutique');
+        setError('Failed to fetch boutique.');
       }
     };
     fetchBoutique();
-  }, []);
+  }, [boutiqueId]);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -64,330 +71,245 @@ const StoreManagement: React.FC = () => {
         nom: formData.storeName,
         description: formData.description,
         logo: formData.logo,
-        image: formData.coverImage ? new File([formData.coverImage], "coverImage.jpg", { type: "image/jpeg" }) : null,
+        image: formData.coverImage || null,
         category_boutique: formData.category,
         adresse: formData.address,
         telephone: formData.phone,
         email: formData.email,
-        website: formData.website,
+       
       };
       const updatedBoutique = await updateBoutique(boutique.id, payload);
       setBoutique(updatedBoutique);
-      setIsEditing(false); // Exit edit mode after save
+      setIsEditing(false);
       setError('');
     } catch (err) {
-      setError('Failed to update boutique');
+      setError('Failed to update boutique.');
     }
   };
 
   if (!boutique) {
-    return <div>Loading...</div>;
+    return <Box p={4}><Typography>Loading...</Typography></Box>;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Gestion de Boutique</h1>
-          <p className="text-gray-500">Personnalisez les informations de votre boutique</p>
-        </div>
+    <Box p={4}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box>
+          <Typography variant="h4" fontWeight="bold">Store Management</Typography>
+          <Typography color="text.secondary">Customize your store details</Typography>
+        </Box>
         {!isEditing && (
-          <button
+          <Button
+            variant="contained"
+            startIcon={<Edit />}
             onClick={() => setIsEditing(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition duration-200"
           >
-            <Edit size={18} className="mr-2" />
-            <span>Modifier</span>
-          </button>
+            Edit
+          </Button>
         )}
-      </div>
+      </Box>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        {!isEditing ? (
-          <div>
-            {/* Store Cover Image */}
-            <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative">
-              {formData.coverImage && (
-                <img
-                  src={formData.coverImage}
-                  alt="Store Cover"
-                  className="h-full w-full object-cover absolute inset-0"
-                />
-              )}
-              <div className="absolute bottom-4 left-6 flex items-center">
-                <div className="h-16 w-16 rounded-lg bg-white p-1 mr-4 shadow-lg">
-                  {formData.logo ? (
-                    <img
-                      src={formData.logo}
-                      alt="Store Logo"
-                      className="h-full w-full object-cover rounded"
-                    />
-                  ) : (
-                    <div className="h-full w-full bg-gray-200 rounded flex items-center justify-center">
-                      <Building size={32} className="text-gray-400" />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h2 className="text-white text-2xl font-bold drop-shadow-md">
-                    {formData.storeName}
-                  </h2>
-                  <span className="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full">
-                    {formData.category}
-                  </span>
-                </div>
-              </div>
-            </div>
+ 
 
-            {/* Store Details */}
-            <div className="p-6">
-              <div className="mb-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Description</h3>
-                <p className="text-gray-600">
-                  {formData.description || 'Aucune description disponible.'}
-                </p>
-              </div>
+      {!isEditing ? (
+        <Box sx={{ bgcolor: 'white', borderRadius: 2, boxShadow: 1, overflow: 'hidden' }}>
+          <Box sx={{ height: 192, bgcolor: 'linear-gradient(to right, #3b82f6, #8b5cf6)', position: 'relative' }}>
+            {formData.coverImage && (
+              <img
+                src={formData.coverImage}
+                alt="Store Cover"
+                style={{ height: '100%', width: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+              />
+            )}
+            <Box sx={{ position: 'absolute', bottom: 16, left: 24, display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ height: 64, width: 64, borderRadius: 1, bgcolor: 'white', p: 1, mr: 2, boxShadow: 3 }}>
+                {formData.logo ? (
+                  <img
+                    src={formData.logo}
+                    alt="Store Logo"
+                    style={{ height: '100%', width: '100%', objectFit: 'cover', borderRadius: 4 }}
+                  />
+                ) : (
+                  <Box sx={{ height: '100%', width: '100%', bgcolor: 'grey.200', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Building size={32} color="#9ca3af" />
+                  </Box>
+                )}
+              </Box>
+              <Box>
+                <Typography variant="h5" color="white" sx={{ textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                  {formData.storeName}
+                </Typography>
+                <Box component="span" sx={{ bgcolor: 'blue.200', color: 'blue.800', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem' }}>
+                  {formData.category}
+                </Box>
+              </Box>
+            </Box>
+          </Box>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Statistiques de la Boutique</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-gray-600">Date de création</span>
-                      <span className="font-medium">12/05/2023</span>
-                    </div>
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-gray-600">Nombre de produits</span>
-                      <span className="font-medium">24</span>
-                    </div>
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-gray-600">Commandes totales</span>
-                      <span className="font-medium">156</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Évaluation moyenne</span>
-                      <div className="flex items-center">
-                        <span className="font-medium mr-2">4.8</span>
-                        <div className="flex">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <svg
-                              key={star}
-                              className={`h-4 w-4 ${star <= 5 ? 'text-yellow-400' : 'text-gray-300'}`}
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M10 15.934l-6.18 3.254 1.18-6.875L.1 7.628l6.9-1.003L10 .5l3 6.125 6.9 1.003-4.9 4.685 1.18 6.875L10 15.934z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          <Box p={4}>
+            <Box mb={4}>
+              <Typography variant="h6" fontWeight="medium" mb={1}>Description</Typography>
+              <Typography color="text.secondary">
+                {formData.description || 'No description available.'}
+              </Typography>
+            </Box>
 
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Informations de Contact</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-gray-600">Email</span>
-                      <span className="font-medium">{formData.email}</span>
-                    </div>
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-gray-600">Téléphone</span>
-                      <span className="font-medium">{formData.phone || 'Non renseigné'}</span>
-                    </div>
-                    <div className="flex justify-between border-b pb-2">
-                      <span className="text-gray-600">Adresse</span>
-                      <span className="font-medium">{formData.address || 'Non renseignée'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Site web</span>
-                      <span className="font-medium text-blue-600">
-                        {formData.website || 'Non renseigné'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {error && <p className="text-red-500">{error}</p>}
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Nom de la boutique
-                </label>
-                <input
-                  type="text"
-                  id="storeName"
-                  name="storeName"
-                  value={formData.storeName}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 4 }}>
+              <Box>
+                <Typography variant="h6" fontWeight="medium" mb={2}>Store Statistics</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'grey.200', pb: 1 }}>
+                    <Typography color="text.secondary">Creation Date</Typography>
+                    <Typography fontWeight="medium">12/05/2023</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'grey.200', pb: 1 }}>
+                    <Typography color="text.secondary">Total Products</Typography>
+                    <Typography fontWeight="medium">24</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'grey.200', pb: 1 }}>
+                    <Typography color="text.secondary">Total Orders</Typography>
+                    <Typography fontWeight="medium">156</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography color="text.secondary">Average Rating</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography fontWeight="medium" mr={1}>4.8</Typography>
+                      <Box sx={{ display: 'flex' }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <svg
+                            key={star}
+                            className={`h-4 w-4 ${star <= 4.8 ? 'text-yellow-400' : 'text-gray-300'}`}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 15.934l-6.18 3.254 1.18-6.875L.1 7.628l6.9-1.003L10 .5l3 6.125 6.9 1.003-4.9 4.685 1.18 6.875L10 15.934z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        ))}
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
 
-              <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={4}
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
-                  Catégorie
-                </label>
-                <select
-                  id="category"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Sélectionnez une catégorie</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
-                    Logo
-                  </label>
-                  <div className="border border-dashed border-gray-300 rounded-md p-4 text-center">
-                    <input
-                      type="text"
-                      id="logo"
-                      name="logo"
-                      value={formData.logo}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 mb-2"
-                      placeholder="URL de l'image"
-                    />
-                    <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                      <UploadCloud size={18} />
-                      <span>Télécharger une image</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700 mb-1">
-                    Image de couverture
-                  </label>
-                  <div className="border border-dashed border-gray-300 rounded-md p-4 text-center">
-                    <input
-                      type="text"
-                      id="coverImage"
-                      name="coverImage"
-                      value={formData.coverImage}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 mb-2"
-                      placeholder="URL de l'image"
-                    />
-                    <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                      <UploadCloud size={18} />
-                      <span>Télécharger une image</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse
-                </label>
-                <input
-                  type="text"
-                  id="address"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  Téléphone
-                </label>
-                <input
-                  type="text"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-1">
-                  Site web
-                </label>
-                <input
-                  type="text"
-                  id="website"
-                  name="website"
-                  value={formData.website}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4 border-t">
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              <Box>
+                <Typography variant="h6" fontWeight="medium" mb={2}>Contact Information</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'grey.200', pb: 1 }}>
+                    <Typography color="text.secondary">Email</Typography>
+                    <Typography fontWeight="medium">{formData.email}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'grey.200', pb: 1 }}>
+                    <Typography color="text.secondary">Phone</Typography>
+                    <Typography fontWeight="medium">{formData.phone || 'Not provided'}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'grey.200', pb: 1 }}>
+                    <Typography color="text.secondary">Address</Typography>
+                    <Typography fontWeight="medium">{formData.address || 'Not provided'}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography color="text.secondary">Website</Typography>
+                    <Typography fontWeight="medium" color="blue.600">{formData.website || 'Not provided'}</Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      ) : (
+        <Box component="form" onSubmit={handleSubmit} sx={{ bgcolor: 'white', borderRadius: 2, boxShadow: 1, p: 4 }}>
+          <Box sx={{ display: 'grid', gap: 3 }}>
+            <Box>
+              <InputLabel htmlFor="storeName">Store Name</InputLabel>
+              <TextField
+                fullWidth id="storeName" name="storeName" value={formData.storeName}
+                onChange={handleInputChange} required
+              />
+            </Box>
+            <Box>
+              <InputLabel htmlFor="description">Description</InputLabel>
+              <TextField
+                fullWidth id="description" name="description" value={formData.description}
+                onChange={handleInputChange} multiline rows={4}
+              />
+            </Box>
+            <Box>
+              <InputLabel htmlFor="category">Category</InputLabel>
+              <Select
+                fullWidth id="category" name="category" value={formData.category}
+                onChange={handleInputChange}
               >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Enregistrer
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
+                <MenuItem value="">Select a category</MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+              <Box>
+                <InputLabel htmlFor="logo">Logo</InputLabel>
+                <TextField
+                  fullWidth id="logo" name="logo" value={formData.logo}
+                  onChange={handleInputChange} placeholder="Image URL"
+                />
+              </Box>
+              <Box>
+                <InputLabel htmlFor="coverImage">Cover Image</InputLabel>
+                <TextField
+                  fullWidth id="coverImage" name="coverImage" value={formData.coverImage}
+                  onChange={handleInputChange} placeholder="Image URL"
+                />
+              </Box>
+            </Box>
+            <Box>
+              <InputLabel htmlFor="address">Address</InputLabel>
+              <TextField
+                fullWidth id="address" name="address" value={formData.address}
+                onChange={handleInputChange}
+              />
+            </Box>
+            <Box>
+              <InputLabel htmlFor="phone">Phone</InputLabel>
+              <TextField
+                fullWidth id="phone" name="phone" value={formData.phone}
+                onChange={handleInputChange}
+              />
+            </Box>
+            <Box>
+              <InputLabel htmlFor="email">Email</InputLabel>
+              <TextField
+                fullWidth id="email" name="email" value={formData.email}
+                onChange={handleInputChange} type="email"
+              />
+            </Box>
+            <Box>
+              <InputLabel htmlFor="website">Website</InputLabel>
+              <TextField
+                fullWidth id="website" name="website" value={formData.website}
+                onChange={handleInputChange}
+              />
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, pt: 3, borderTop: '1px solid', borderColor: 'grey.200' }}>
+            <Button
+              variant="outlined"
+              onClick={() => setIsEditing(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              type="submit"
+            >
+              Save
+            </Button>
+          </Box>
+        </Box>
+      )}
+    </Box>
   );
 };
 

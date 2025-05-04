@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Sidebar from './Sidebar';
+
 import Overview from './pages/Overview';
 import Users from './pages/Users';
 import Merchants from './pages/Merchants';
@@ -10,6 +10,7 @@ import Support from './pages/Support';
 import Admins from './pages/Admins';
 import Settings from './pages/Settings';
 import Header from './Header';
+import Sidebar from './Sidebar';
 
 type Page = 'overview' | 'users' | 'merchants' | 'stores' | 'categories' | 'content' | 'support' | 'admins' | 'settings';
 

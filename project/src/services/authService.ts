@@ -7,6 +7,7 @@ const API_URL = 'http://localhost:8000/users';
 
 
 export const register = async (userData: UserSignupData) : Promise<{ message: string }>=> {
+  console.log('register',userData)
   try {
     const response = await axios.post(`${API_URL}/signup/`, userData);
     console.log('Réponse de l\'API:', response.data); 
