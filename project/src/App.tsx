@@ -20,6 +20,10 @@ import AdminDashboard from './admin/AdminDashboard';
 import CategoryPage from './admin/pages/CategoryPage';
 import ShopCreatorPage from './admin/pages/CategoryPage';
 import ErrorBoundary from './ErrorBoundary';
+import CategoryBoutiquesPage from './pages/CategoryBoutiquesPage';
+import BoutiqueCategoriesPage from './pages/BoutiqueCategoriesPage';
+import CategoryProductsPage from './pages/CategoryProductsPage';
+import BoutiqueProductsPage from './pages/BoutiqueProductsPage';
 function App() {
   return (
     
@@ -43,8 +47,9 @@ function App() {
               <Route path="MerchantDashboard" element={<MerchantDashboard />} />
               <Route path="AdminDashboard" element={<AdminDashboard />} />
               <Route path="ShopCreatorPage" element={<ShopCreatorPage />} />
-
-
+              <Route path="/category-boutiques/:categoryId" element={<CategoryBoutiquesPage />} />
+        <Route path="/boutique/:boutiqueId/categories" element={<BoutiqueCategoriesPage />} />
+        <Route path="/boutique/:boutiqueId/category/:categoryId" element={<BoutiqueProductsPage />} />
 
               
               

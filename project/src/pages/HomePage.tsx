@@ -5,18 +5,28 @@ import ProductCard from '../components/ui/ProductCard';
 import CategoryCard from '../components/ui/CategoryCard';
 import VendorCard from '../components/ui/VendorCard';
 import SaveNowPayLaterBanner from '../components/ui/SaveNowPayLaterBanner';
-import { categories, vendors, featuredProducts, newProducts } from '../data/mockData';
+import { getCategoryBoutiques } from '../services/boutiqueService';
+import { CategoryBoutique, Product, Vendor } from '../types';
+import { featuredProducts, newProducts, vendors } from '../data/mockData';
 
 const HomePage = () => {
   const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<CategoryBoutique[]>([]);
 
   useEffect(() => {
-    // Simulate data loading
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const categoryData = await getCategoryBoutiques();
+        setCategories(categoryData);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      } finally {
+        setTimeout(() => setIsLoading(false), 1000);
+      }
+    };
 
-    return () => clearTimeout(timer);
+    fetchData();
   }, []);
 
   if (isLoading) {
@@ -37,7 +47,7 @@ const HomePage = () => {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
             <h2 className="text-2xl md:text-3xl font-bold">Catégories</h2>
-            <Link to="/products" className="text-primary hover:text-primary-dark font-medium">
+            <Link to="/categories" className="text-primary hover:text-primary-dark font-medium">
               Voir toutes les catégories
             </Link>
           </div>
@@ -61,7 +71,7 @@ const HomePage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {featuredProducts.slice(0, 8).map((product) => (
+            {featuredProducts.slice(0, 8).map((product: Product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
@@ -82,7 +92,7 @@ const HomePage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {newProducts.slice(0, 4).map((product) => (
+            {newProducts.slice(0, 4).map((product: Product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
@@ -100,7 +110,7 @@ const HomePage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {vendors.map((vendor) => (
+            {vendors.map((vendor: Vendor) => (
               <VendorCard key={vendor.id} vendor={vendor} />
             ))}
           </div>

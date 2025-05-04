@@ -12,8 +12,9 @@ import StoreManagement from '../StoreManagement';
 import Support from '../Support';
 import { mockMerchant } from '../data/mockData';
 import Sidebar from '../Sidebar';
+import { Users } from 'lucide-react';
 
-type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages';
+type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages' | 'user';
 
 const MerchantDashboard: React.FC = () => {
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
@@ -48,6 +49,8 @@ const MerchantDashboard: React.FC = () => {
         return <AccountSettings merchant={mockMerchant} />;
       case 'messages':
         return <CustomerMessages />;
+        case 'user':
+          return <Users />;
       default:
         return <Overview />;
     }

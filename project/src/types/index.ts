@@ -28,33 +28,30 @@ export interface LoginResponse {
   user: User;
 }
 
-
 export interface CategoryBoutique {
-
-  id?: number;
+  id: number;
   nom: string;
   image?: string | null;
-
 }
 
 export interface Product {
   id: number;
-  nom: string;
-  description: string | null;
-  prix: number;
-  stock: number;
-  image: string | null;
-  couleur: string | null;
-  taille: string | null;
-  categorie: string;
-  boutique: string;
-  created_at: string;
-  updated_at: string;
+  name: string;
+  images: string[];
+  price: number;
+  discountedPrice?: number | null;
+  rating: number;
+  isNew: boolean;
+  vendor: {
+    id: number;
+    name: string;
+  };
 }
+
 export type UserRole = 'client' | 'marchand' | 'admin';
 
 export interface UserAdmin {
-  id: number;               // si tu retournes un id
+  id: number;
   email: string;
   nom: string;
   prenom: string;
@@ -63,7 +60,7 @@ export interface UserAdmin {
   is_active: boolean;
   is_staff: boolean;
   is_approved: boolean;
-  created_at: string;        // dates sont souvent string en JSON
+  created_at: string;
   updated_at: string;
   boutique_nom?: string;
 }
@@ -78,31 +75,32 @@ export interface Marchand extends User {
   description?: string;
 }
 
-export interface Admin extends User {
-  // Tu peux ajouter ici des méthodes/fonctions spécifiques plus tard
+export interface Admin extends User {}
+
+export interface Vendor {
+  id: number;
+  name: string;
+  logo: string;
+  description: string;
+  rating: number;
+  productsCount: number;
 }
 
-
-
-
-
 export interface Boutique {
-
   id: number;
   nom: string;
   description: string;
-  logo?: string | File; // Can be URL or File during creation
+  logo?: string | File;
   adresse?: string;
   telephone?: string;
   email?: string;
-  image?: string | File; // Can be URL or File during creation
-  category_boutique: number | CategoryBoutique; // ID or object
-  marchand: number; // Assuming marchand is an ID
+  image?: string | File;
+  category_boutique: number | CategoryBoutique;
+  marchand: number;
   created_at: string;
   updated_at: string;
 }
 
-// Authentication-related interfaces
 export interface AuthToken {
   token: string;
 }
@@ -111,16 +109,13 @@ export interface MerchantUser {
   id: number;
   username: string;
   email: string;
-  first_name: string; // Maps to prenom in Marchand
-  last_name: string;  // Maps to nom in Marchand
+  first_name: string;
+  last_name: string;
   is_marchant: boolean;
 }
 
-// Model interfaces based on backend serializers
-
-
 export interface Marchand {
-  user: string; // String representation (e.g., "Marchand: Prenom Nom")
+  user: string;
   is_marchant: boolean;
 }
 
@@ -128,7 +123,7 @@ export interface CategoryProduit {
   id: number;
   nom: string;
   image: string | null;
-  boutique: string; // Boutique ID
+  boutique: string;
   boutique_details: Boutique;
   created_at: string;
   updated_at: string;
@@ -138,20 +133,19 @@ export interface Produit {
   id: number;
   nom: string;
   description: string | null;
-  prix: string; // Decimal as string (e.g., "19.99")
+  prix: string;
   stock: number;
   image: string | null;
   couleur: string | null;
   taille: string | null;
-  category_produit: number; // CategoryProduit ID
+  category_produit: number;
   category_produit_details: CategoryProduit;
-  boutique: string; // Boutique ID
+  boutique: string;
   boutique_details: Boutique;
   created_at: string;
   updated_at: string;
 }
 
-// API payload interfaces
 export interface ProduitCreatePayload {
   nom: string;
   description?: string;
@@ -199,8 +193,7 @@ export interface BoutiqueUpdatePayload {
   category_boutique?: string;
 }
 
-// Error response interface
 export interface ApiError {
   error?: string;
-  [key: string]: any; // For detailed validation errors
+  [key: string]: any;
 }

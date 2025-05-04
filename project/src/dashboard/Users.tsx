@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, UserPlus, Award, Clock, CheckCircle, XCircle, DollarSign } from 'lucide-react';
-import { UserService } from '../../services/userService';
-import { UserAdmin } from '../../types';
+import { UserService } from '../services/userService';
+import { UserAdmin } from '../types';
+
 
 
 const Users: React.FC = () => {

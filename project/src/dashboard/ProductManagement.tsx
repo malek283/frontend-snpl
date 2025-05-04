@@ -104,13 +104,17 @@ const ProductManagement: React.FC = () => {
       setError('Boutique ID is required. Please ensure a valid boutique is configured.');
       return;
     }
+    if (!productForm.category_produit) {
+      setError('Please select a category for the product.');
+      return;
+    }
     try {
       if (editingProductId) {
         const updatedProduit = await updateProduit(editingProductId, productForm);
         setProduits(produits.map((p) => (p.id === editingProductId ? updatedProduit : p)));
         setEditingProductId(null);
       } else {
-        const newProduit = await createProduit({ ...productForm, category_produit: selectedCategory });
+        const newProduit = await createProduit(productForm); // Use productForm directly
         setProduits([...produits, newProduit]);
       }
       setProductForm({
@@ -123,7 +127,6 @@ const ProductManagement: React.FC = () => {
       console.error('Product submit error:', err);
     }
   };
-
   // Handle category form submission
   const handleCategorySubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -185,6 +188,7 @@ const ProductManagement: React.FC = () => {
 
   // Handle category deletion
   const handleDeleteCategory = async (id: number) => {
+    console.log('Deleting category with ID:', id); // Debug
     try {
       await deleteCategoryProduit(id);
       setCategories(categories.filter((c) => c.id !== id));
@@ -346,21 +350,21 @@ const ProductManagement: React.FC = () => {
               fullWidth margin="dense" label="Size" name="taille" value={productForm.taille}
               onChange={handleProductFormChange}
             />
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Category</InputLabel>
-              <Select
-                name="category_produit"
-                value={productForm.category_produit}
-                onChange={(e: SelectChangeEvent<string>) => handleProductFormChange(e)}
-                label="Category"
-                required
-              >
-                <MenuItem value="">Select Category</MenuItem>
-                {categories.map((category) => (
-                  <MenuItem key={category.id} value={category.id.toString()}>{category.nom}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+<FormControl fullWidth margin="dense">
+  <InputLabel>Category</InputLabel>
+  <Select
+    name="category_produit"
+    value={productForm.category_produit}
+    onChange={(e: SelectChangeEvent<string>) => handleProductFormChange(e)}
+    label="Category"
+    required
+  >
+    <MenuItem value="">Select Category</MenuItem>
+    {categories.map((category) => (
+      <MenuItem key={category.id} value={category.id.toString()}>{category.nom}</MenuItem>
+    ))}
+  </Select>
+</FormControl>
             <TextField
               fullWidth margin="dense" type="file" name="image" onChange={handleProductFormChange}
               InputLabelProps={{ shrink: true }} label="Image"

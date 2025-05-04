@@ -40,6 +40,7 @@ export const deleteProduit = async (id: number): Promise<void> => {
   await api.delete(`boutique/produits/${id}/`);
 };
 
+
 // CategoryProduit Services
 export const getCategoryProduits = async (): Promise<CategoryProduit[]> => {
   const response = await api.get<CategoryProduit[]>('boutique/category_produits/');
@@ -113,3 +114,27 @@ export const updateBoutique = async (id: number, boutiqueData: BoutiqueUpdatePay
   });
   return response.data;
 };
+export const getBoutiqueDetails = async (boutiqueId: string): Promise<{
+  boutique: Boutique;
+  categories: CategoryProduit[];
+  products: Produit[];
+}> => {
+  try {
+    const response = await api.get(`boutique/boutiques/${boutiqueId}/details/`);
+    
+    // Validation des données reçues
+    if (!response.data || !response.data.boutique) {
+      throw new Error('Données de boutique invalides');
+    }
+    
+    return {
+      boutique: response.data.boutique,
+      categories: response.data.categories || [],
+      products: response.data.products || []
+    };
+  } catch (error) {
+    console.error('Error fetching boutique details:', error);
+    throw error;
+  }
+};
+
