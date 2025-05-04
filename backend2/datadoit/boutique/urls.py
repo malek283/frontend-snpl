@@ -3,14 +3,16 @@ from . import views
 
 urlpatterns = [
     # Boutique URLs
-
-    
     path('boutiquechat/', views.boutique_list_createchat, name='boutique-list-create'),
     path('boutiques/', views.boutique_list_create, name='boutique-list-create'),
     path('boutiques/<int:pk>/', views.boutique_retrieve_update_destroy, name='boutique-retrieve-update-destroy'),
+    path('boutiques/<int:boutique_id>/details/', views.boutique_detail_public, name='boutique-detail-public'),
+    path('boutiques/<int:boutique_id>/categories/<int:category_id>/produits/', views.boutique_produits_by_category, name='boutique-produits-by-category'),
     
+    # CategoryBoutique URLs
     path('category_boutiques/', views.category_boutique_list_create, name='category_boutique-list-create'),
     path('category_boutiques/<int:pk>/', views.category_boutique_detail, name='category_boutique-detail'),
+    path('category_boutiques/<int:pk>/boutiques/', views.boutiques_by_category, name='boutiques-by-category'),
     
     # CategoryProduit URLs
     path('category_produits/', views.category_produit_list_create, name='category_produit-list-create'),

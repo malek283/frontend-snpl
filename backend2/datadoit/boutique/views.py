@@ -11,6 +11,21 @@ from .serializers import BoutiqueSerializer, CategoryBoutiqueSerializer, Categor
 
 logger = logging.getLogger(__name__)
 
+@api_view(['GET'])
+def boutiques_by_category(request, pk):
+    """
+    Retrieve all boutiques associated with a specific CategoryBoutique.
+    """
+    try:
+        category_boutique = get_object_or_404(CategoryBoutique, pk=pk)
+        boutiques = Boutique.objects.filter(category_boutique=category_boutique)
+        serializer = BoutiqueSerializer(boutiques, many=True, context={'request': request})
+        response = Response(serializer.data)
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+    except Exception as e:
+        logger.error(f"Error fetching boutiques by category {pk}: {str(e)}")
+        return Response({'error': 'Une erreur est survenue'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
@@ -21,7 +36,6 @@ def boutique_list_createchat(request):
         
         try:
             if boutique_id:
-                # Pour un client qui cherche une boutique spécifique
                 boutique = Boutique.objects.get(id=boutique_id)
                 if request.user.role.lower() == 'client':
                     serializer = BoutiqueSerializer(boutique, context={'request': request})
@@ -32,7 +46,6 @@ def boutique_list_createchat(request):
                 else:
                     return Response({'error': 'Accès non autorisé'}, status=403)
             elif marchand:
-                # Pour un marchand qui cherche ses boutiques
                 if request.user.role.lower() == 'marchand':
                     boutiques = Boutique.objects.filter(marchand__user=request.user)
                     serializer = BoutiqueSerializer(boutiques, many=True, context={'request': request})
@@ -40,7 +53,6 @@ def boutique_list_createchat(request):
                 else:
                     return Response({'error': 'Accès non autorisé'}, status=403)
             else:
-                # Pour un marchand qui cherche toutes ses boutiques
                 if request.user.role.lower() == 'marchand':
                     boutiques = Boutique.objects.filter(marchand__user=request.user)
                     serializer = BoutiqueSerializer(boutiques, many=True, context={'request': request})
@@ -52,8 +64,8 @@ def boutique_list_createchat(request):
         except Exception as e:
             logger.error(f"Erreur lors de la récupération des boutiques: {str(e)}")
             return Response({'error': 'Une erreur est survenue'}, status=500)
+
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
 def boutique_list_create(request):
     if request.method == 'GET':
         marchand = request.query_params.get('marchand')
@@ -96,7 +108,6 @@ def boutique_list_create(request):
 
         logger.error(f"Serializer errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
@@ -187,7 +198,6 @@ def produit_list_create(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([IsAuthenticated])
 def produit_detail(request, pk):
     produit = get_object_or_404(Produit, pk=pk)
 
@@ -246,7 +256,6 @@ def category_boutique_list_create(request):
         serializer = CategoryBoutiqueSerializer(categories_boutique, many=True, context={'request': request})
         response_data = serializer.data
         logger.debug(f"GET CategoryBoutique response data: {response_data}")
-        # Log database state for each category
         for category in categories_boutique:
             image_path = category.image.path if category.image else None
             logger.debug(f"CategoryBoutique {category.nom} (id: {category.id}): image={category.image}, file_exists={os.path.exists(image_path) if image_path else False}")
@@ -305,7 +314,6 @@ def category_boutique_detail(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
 def category_produit_list_create(request):
     try:
         marchand = Marchand.objects.get(user=request.user)
@@ -400,3 +408,54 @@ def category_produit_retrieve_update_destroy(request, pk):
     elif request.method == 'DELETE':
         category_produit.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['GET'])
+def boutique_categories_produits(request, boutique_id):
+    try:
+        boutique = get_object_or_404(Boutique, pk=boutique_id)
+        categories = CategoryProduit.objects.filter(boutique=boutique)
+        categories_serializer = CategoryProduitSerializer(categories, many=True, context={'request': request})
+        produits = Produit.objects.filter(boutique=boutique)
+        produits_serializer = ProduitSerializer(produits, many=True, context={'request': request})
+        
+        response_data = {
+            'boutique': BoutiqueSerializer(boutique, context={'request': request}).data,
+            'categories': categories_serializer.data,
+            'produits': produits_serializer.data
+        }
+        
+        return Response(response_data)
+    except Exception as e:
+        logger.error(f"Error fetching boutique details: {str(e)}")
+        return Response({'error': 'Une erreur est survenue'}, status=500)
+
+@api_view(['GET'])
+def boutique_produits_by_category(request, boutique_id, category_id):
+    try:
+        boutique = get_object_or_404(Boutique, pk=boutique_id)
+        category = get_object_or_404(CategoryProduit, pk=category_id, boutique=boutique)
+        produits = Produit.objects.filter(boutique=boutique, category_produit=category)
+        serializer = ProduitSerializer(produits, many=True, context={'request': request})
+        return Response(serializer.data)
+    except Exception as e:
+        logger.error(f"Error filtering products by category: {str(e)}")
+        return Response({'error': 'Une erreur est survenue'}, status=500)
+
+@api_view(['GET'])
+def boutique_detail_public(request, boutique_id):
+    try:
+        boutique = get_object_or_404(Boutique, pk=boutique_id)
+        categories = CategoryProduit.objects.filter(boutique=boutique)
+        categories_serializer = CategoryProduitSerializer(categories, many=True, context={'request': request})
+        products = Produit.objects.filter(boutique=boutique)
+        products_serializer = ProduitSerializer(products, many=True, context={'request': request})
+        
+        response_data = {
+            'boutique': BoutiqueSerializer(boutique, context={'request': request}).data,
+            'categories': categories_serializer.data,
+            'products': products_serializer.data
+        }
+        
+        return Response(response_data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
