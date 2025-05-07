@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Download, MoreHorizontal, Eye, Edit, Trash2, UserPlus, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
-
+import { Search, Filter, Download, MoreHorizontal, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { UserService } from '../../services/userService';
 import { UserAdmin } from '../../types';
 
@@ -16,8 +15,7 @@ const formatDate = (dateString: string): string => {
 const getMerchantStatus = (user: UserAdmin): string => {
   if (!user.is_approved) return 'pending';
   if (user.is_approved && user.is_active) return 'active';
-  if (user.is_approved && !user.is_active) return 'suspended';
-  return 'pending'; // Default fallback
+  return 'rejected';
 };
 
 interface Merchant {
@@ -42,7 +40,7 @@ const Merchants = () => {
   }>({ open: false, merchantId: null, action: '' });
   const [notificationMessage, setNotificationMessage] = useState<{
     text: string;
-    type: 'success' | 'warning' | 'error';
+    type: 'success' | 'error';
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +79,7 @@ const Merchants = () => {
     total: merchants.length,
     active: merchants.filter((m) => m.status === 'active').length,
     pending: merchants.filter((m) => m.status === 'pending').length,
-    suspended: merchants.filter((m) => m.status === 'suspended').length,
+    rejected: merchants.filter((m) => m.status === 'rejected').length,
   };
 
   // Generate status badge color
@@ -91,7 +89,7 @@ const Merchants = () => {
         return 'bg-green-100 text-green-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
-      case 'suspended':
+      case 'rejected':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -110,8 +108,6 @@ const Merchants = () => {
         updatedMerchant = await UserService.updateUser(merchantId, { is_active: true });
       } else if (newStatus === 'rejected') {
         updatedMerchant = await UserService.rejectUser(merchantId);
-      } else if (newStatus === 'suspended') {
-        updatedMerchant = await UserService.updateUser(merchantId, { is_active: false });
       } else {
         throw new Error('Invalid status');
       }
@@ -137,12 +133,10 @@ const Merchants = () => {
       const message =
         newStatus === 'active'
           ? `${merchant.name} has been approved and activated`
-          : newStatus === 'suspended'
-          ? `${merchant.name} has been suspended`
           : `${merchant.name} application has been rejected`;
       setNotificationMessage({
         text: message,
-        type: newStatus === 'active' ? 'success' : newStatus === 'suspended' ? 'warning' : 'error',
+        type: newStatus === 'active' ? 'success' : 'error',
       });
       setTimeout(() => setNotificationMessage(null), 3000);
     } catch (err) {
@@ -160,51 +154,12 @@ const Merchants = () => {
   const handleDeleteMerchant = async (merchantId: number) => {
     try {
       await UserService.deleteUser(merchantId);
-      
-      // Update merchants list using functional update
       setMerchants(prevMerchants => prevMerchants.filter((m) => m.id !== merchantId));
-      
-      // Close confirmation dialog
       setConfirmDialog({ open: false, merchantId: null, action: '' });
-      
-      // Show success notification
       setNotificationMessage({ text: 'Merchant deleted successfully', type: 'success' });
       setTimeout(() => setNotificationMessage(null), 3000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error deleting merchant';
-      setNotificationMessage({ text: errorMessage, type: 'error' });
-    }
-  };
-
-  // Handle merchant creation
-  const handleCreateMerchant = async () => {
-    try {
-      const newUser: Partial<UserAdmin> = {
-        email: `newmerchant${Date.now()}@example.com`,
-        nom: 'Merchant',
-        prenom: 'New',
-        telephone: '+1234567890',
-        role: 'marchand',
-        is_active: false,
-        is_staff: false,
-        is_approved: false,
-      };
-      const createdUser = await UserService.createUser(newUser);
-     
-      const newMerchant: Merchant = {
-        id: createdUser.id,
-        name: `${createdUser.prenom} ${createdUser.nom}`,
-        owner: `${createdUser.prenom} ${createdUser.nom}`,
-        email: createdUser.email,
-        telephone: createdUser.telephone,
-        status: getMerchantStatus(createdUser),
-        joined: createdUser.created_at ? formatDate(createdUser.created_at) : 'N/A',
-      };
-      setMerchants(prevMerchants => [...prevMerchants, newMerchant]);
-      setNotificationMessage({ text: 'Merchant created successfully', type: 'success' });
-      setTimeout(() => setNotificationMessage(null), 3000);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error creating merchant';
       setNotificationMessage({ text: errorMessage, type: 'error' });
     }
   };
@@ -227,8 +182,6 @@ const Merchants = () => {
       switch (notificationMessage.type) {
         case 'success':
           return 'bg-green-50 border-green-500 text-green-700';
-        case 'warning':
-          return 'bg-yellow-50 border-yellow-500 text-yellow-700';
         case 'error':
           return 'bg-red-50 border-red-500 text-red-700';
         default:
@@ -241,7 +194,6 @@ const Merchants = () => {
       >
         <div className="flex">
           {notificationMessage.type === 'success' && <CheckCircle className="h-5 w-5 mr-2" />}
-          {notificationMessage.type === 'warning' && <AlertTriangle className="h-5 w-5 mr-2" />}
           {notificationMessage.type === 'error' && <XCircle className="h-5 w-5 mr-2" />}
           <span>{notificationMessage.text}</span>
         </div>
@@ -266,12 +218,6 @@ const Merchants = () => {
         message = `Are you sure you want to reject ${merchant?.name}'s application? This action cannot be undone.`;
         confirmText = 'Reject';
         confirmColor = 'bg-red-600 hover:bg-red-700';
-        break;
-      case 'suspend':
-        title = 'Suspend Merchant';
-        message = `Are you sure you want to suspend ${merchant?.name}? They will lose access to the platform until reinstated.`;
-        confirmText = 'Suspend';
-        confirmColor = 'bg-yellow-600 hover:bg-yellow-700';
         break;
       case 'delete':
         title = 'Delete Merchant';
@@ -299,12 +245,7 @@ const Merchants = () => {
                 if (confirmDialog.action === 'delete') {
                   handleDeleteMerchant(confirmDialog.merchantId!);
                 } else {
-                  const newStatus =
-                    confirmDialog.action === 'approve'
-                      ? 'active'
-                      : confirmDialog.action === 'reject'
-                      ? 'rejected'
-                      : 'suspended';
+                  const newStatus = confirmDialog.action === 'approve' ? 'active' : 'rejected';
                   handleStatusChange(confirmDialog.merchantId!, newStatus);
                 }
               }}
@@ -318,16 +259,16 @@ const Merchants = () => {
     );
   };
 
-  // Get stat card icon
+  // Get stat icon
   const getStatIcon = (title: string) => {
     switch (title) {
       case 'Total Merchants':
-        return <UserPlus className="w-6 h-6" />;
+        return <CheckCircle className="w-6 h-6" />;
       case 'Active Merchants':
         return <CheckCircle className="w-6 h-6" />;
       case 'Pending Approval':
-        return <AlertTriangle className="w-6 h-6" />;
-      case 'Suspended':
+        return <XCircle className="w-6 h-6" />;
+      case 'Rejected':
         return <XCircle className="w-6 h-6" />;
       default:
         return null;
@@ -347,13 +288,6 @@ const Merchants = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-2xl font-semibold text-gray-900">Merchant Management</h2>
-        <button
-          onClick={handleCreateMerchant}
-          className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-        >
-          <UserPlus size={16} className="mr-2" />
-          Add New Merchant
-        </button>
       </div>
 
       {/* Filters and Search */}
@@ -381,7 +315,7 @@ const Merchants = () => {
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="pending">Pending</option>
-                <option value="suspended">Suspended</option>
+                <option value="rejected">Rejected</option>
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                 <Filter size={16} className="text-gray-500" />
@@ -401,7 +335,7 @@ const Merchants = () => {
           { title: 'Total Merchants', value: stats.total, change: '+12%', color: 'bg-blue-50 text-blue-700' },
           { title: 'Active Merchants', value: stats.active, change: '+8%', color: 'bg-green-50 text-green-700' },
           { title: 'Pending Approval', value: stats.pending, change: '-5%', color: 'bg-yellow-50 text-yellow-700' },
-          { title: 'Suspended', value: stats.suspended, change: '+2%', color: 'bg-red-50 text-red-700' },
+          { title: 'Rejected', value: stats.rejected, change: '+2%', color: 'bg-red-50 text-red-700' },
         ].map((stat) => (
           <div
             key={stat.title}
@@ -466,39 +400,23 @@ const Merchants = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                       <div className="flex justify-end items-center space-x-2">
                         <button
-                          className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-blue-600"
-                          title="View Details"
+                          className="p-1 rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600"
+                          title="Approve Merchant"
+                          onClick={() =>
+                            setConfirmDialog({ open: true, merchantId: merchant.id, action: 'approve' })
+                          }
                         >
-                          <Eye size={16} />
+                          <CheckCircle size={16} />
                         </button>
                         <button
-                          className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-indigo-600"
-                          title="Edit"
+                          className="p-1 rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600"
+                          title="Reject Merchant"
+                          onClick={() =>
+                            setConfirmDialog({ open: true, merchantId: merchant.id, action: 'reject' })
+                          }
                         >
-                          <Edit size={16} />
+                          <XCircle size={16} />
                         </button>
-                        {merchant.status === 'pending' && (
-                          <button
-                            className="p-1 rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600"
-                            title="Approve Merchant"
-                            onClick={() =>
-                              setConfirmDialog({ open: true, merchantId: merchant.id, action: 'approve' })
-                            }
-                          >
-                            <CheckCircle size={16} />
-                          </button>
-                        )}
-                        {merchant.status === 'active' && (
-                          <button
-                            className="p-1 rounded-full hover:bg-yellow-100 text-gray-500 hover:text-yellow-600"
-                            title="Suspend Merchant"
-                            onClick={() =>
-                              setConfirmDialog({ open: true, merchantId: merchant.id, action: 'suspend' })
-                            }
-                          >
-                            <AlertTriangle size={16} />
-                          </button>
-                        )}
                         <button
                           className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-red-600"
                           title="Delete"

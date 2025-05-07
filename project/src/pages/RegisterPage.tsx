@@ -1,7 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-
 import { Eye, EyeOff } from 'lucide-react';
 import { UserSignupData } from '../types';
 import { register } from '../services/authService';
@@ -15,6 +14,8 @@ interface FormState {
   role: 'client' | 'marchand' | 'admin';
   password: string;
   confirm_password: string;
+  referral_code: string;
+  has_referral: boolean;
   showPassword: boolean;
   showConfirmPassword: boolean;
 }
@@ -29,6 +30,8 @@ const RegisterPage = () => {
     role: 'client',
     password: '',
     confirm_password: '',
+    referral_code: '',
+    has_referral: false,
     showPassword: false,
     showConfirmPassword: false,
   });
@@ -43,6 +46,10 @@ const RegisterPage = () => {
     setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormState((prev) => ({ ...prev, has_referral: e.target.checked }));
+  };
+
   const togglePasswordVisibility = (field: 'showPassword' | 'showConfirmPassword') => {
     setFormState((prev) => ({ ...prev, [field]: !prev[field] }));
   };
@@ -51,54 +58,73 @@ const RegisterPage = () => {
     e.preventDefault();
 
     const {
-      nom,
-      prenom,
-      email,
-      telephone,
-      adresse,
-      role,
-      password,
-      confirm_password,
+        nom,
+        prenom,
+        email,
+        telephone,
+        adresse,
+        role,
+        password,
+        confirm_password,
+        referral_code,
+        has_referral,
     } = formState;
 
     if (!nom || !prenom || !email || !telephone || !adresse || !password || !confirm_password) {
-      toast.error('Veuillez remplir tous les champs');
-      return;
+        toast.error('Veuillez remplir tous les champs');
+        return;
     }
 
     if (password !== confirm_password) {
-      toast.error('Les mots de passe ne correspondent pas');
-      return;
+        toast.error('Les mots de passe ne correspondent pas');
+        return;
     }
 
     if (password.length < 8) {
-      toast.error('Le mot de passe doit contenir au moins 8 caractères');
-      return;
+        toast.error('Le mot de passe doit contenir au moins 8 caractères');
+        return;
+    }
+
+    if (has_referral && !referral_code) {
+        toast.error('Veuillez entrer un code de parrainage');
+        return;
     }
 
     const userData: UserSignupData = {
-      nom,
-      prenom,
-      email,
-      telephone,
-      adresse,
-      role,
-      password,
-      confirm_password,
+        nom,
+        prenom,
+        email,
+        telephone,
+        adresse,
+        role,
+        password,
+        confirm_password,
+        ...(has_referral && referral_code && { referral_code }),
     };
 
+    console.log('Submitting user data:', userData); // Debug payload
+
     try {
-      setIsLoading(true);
-      console.log('ooooooooo',userData)
-      await register(userData);
-      toast.success('Inscription réussie!');
-      navigate('/login');
+        setIsLoading(true);
+        await register(userData);
+        toast.success('Inscription réussie!');
+        navigate('/login');
     } catch (error: any) {
-      toast.error(error.message || 'Échec de l\'inscription. Veuillez réessayer.');
+        console.error('Registration error:', error.response?.data || error);
+        const errors = error.response?.data?.errors || {};
+        let errorMessage = 'Échec de l\'inscription. Veuillez réessayer.';
+        if (Object.keys(errors).length > 0) {
+            errorMessage = Object.entries(errors)
+                .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+                .join('; ');
+        } else if (error.response?.data?.error) {
+            errorMessage = error.response.data.error;
+        }
+        toast.error(errorMessage);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
-  };
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12">
@@ -108,6 +134,7 @@ const RegisterPage = () => {
             <h1 className="text-2xl font-bold text-center mb-6">Créer un compte</h1>
 
             <form onSubmit={handleSubmit}>
+              {/* Existing fields */}
               <div className="mb-4">
                 <label htmlFor="nom" className="block text-sm font-medium text-gray-700 mb-1">
                   Nom
@@ -204,6 +231,31 @@ const RegisterPage = () => {
                   <option value="marchand">Marchand</option>
                   <option value="admin">Admin</option>
                 </select>
+              </div>
+
+              <div className="mb-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formState.has_referral}
+                    onChange={handleCheckboxChange}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Avez-vous un code de parrainage ?
+                  </span>
+                </label>
+                {formState.has_referral && (
+                  <input
+                    id="referral_code"
+                    name="referral_code"
+                    type="text"
+                    value={formState.referral_code}
+                    onChange={handleInputChange}
+                    className="input mt-2"
+                    placeholder="Entrez le code de parrainage"
+                  />
+                )}
               </div>
 
               <div className="mb-4">

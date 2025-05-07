@@ -17,11 +17,12 @@ import ProductManagement from '../ProductManagement';
 import StoreManagement from '../StoreManagement';
 import Sidebar from '../Sidebar';
 import { Users } from 'lucide-react';
+import RemiseTypeManagement from '../RemiseTypeManagement.';
 
 
 
 
-type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages' | 'user';
+type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages' | 'user' | 'remise';
 
 const MerchantDashboard: React.FC = () => {
   const { boutiqueId } = useParams<{ boutiqueId: string }>();
@@ -72,6 +73,8 @@ const MerchantDashboard: React.FC = () => {
         return <ProductManagement boutiqueId={boutiqueId} />;
       case 'store':
         return <StoreManagement boutiqueId={boutiqueId} />;
+        case 'remise':
+          return <RemiseTypeManagement boutiqueId={boutiqueId} />;
       case 'orders':
         return <OrderManagement />;
       case 'payments':

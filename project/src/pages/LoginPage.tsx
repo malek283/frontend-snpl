@@ -2,10 +2,9 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
-import { UserLoginData } from '../types';
+import { UserLoginData, LoginResponse } from '../types';
 import { useAuthStore } from '../components/Store/authStore';
 import { login } from '../services/authService';
-
 
 interface FormState {
   email: string;
@@ -32,58 +31,55 @@ const LoginPage = () => {
     setFormState((prev) => ({ ...prev, showPassword: !prev.showPassword }));
   };
 
- 
-const handleSubmit = async (e: FormEvent) => {
-  e.preventDefault();
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
 
-  const { email, password } = formState;
+    const { email, password } = formState;
 
-  if (!email || !password) {
-    toast.error('Veuillez remplir tous les champs');
-    return;
-  }
-
-  const userData: UserLoginData = { email, password };
-
-  try {
-    setIsLoading(true);
-    const response = await login(userData);
-
-    setTokens(response);
-    console.log('Tokens stored:', {
-      accessToken: response.access_token,
-      refreshToken: response.refresh_token,
-      user: response.user,
-    });
-    toast.success('Connexion réussie!');
-  
-    // Gestion de la navigation en fonction du rôle de l'utilisateur
-    switch (response.user.role) {
-      case 'admin':
-        navigate('/AdminDashboard');
-        break;
-      case 'marchand':
-
-          navigate('/ShopCreatorPage');
-   
-        break;
-      case 'client':
-        navigate('/HomePage');
-        break;
-      default:
-        toast.error('Rôle non autorisé.');
-        break;
+    if (!email || !password) {
+      toast.error('Veuillez remplir tous les champs');
+      return;
     }
-  } catch (error: any) {
-    const errorMessage =
-      error.detail ||
-      error.message ||
-      'Échec de la connexion. Veuillez vérifier vos identifiants.';
-    toast.error(errorMessage);
-  } finally {
-    setIsLoading(false);
-  }
-};
+
+    const userData: UserLoginData = { email, password };
+
+    try {
+      setIsLoading(true);
+      const response: LoginResponse = await login(userData);
+
+      setTokens(response);
+      console.log('Tokens stored:', {
+        accessToken: response.access_token,
+        refreshToken: response.refresh_token,
+        user: response.user,
+      });
+      toast.success('Connexion réussie!');
+
+      // Role-based navigation
+      switch (response.user.role.toLowerCase()) {
+        case 'admin':
+          navigate('/AdminDashboard');
+          break;
+        case 'marchand':
+          navigate('/ShopCreatorPage');
+          break;
+        case 'client':
+          navigate('/HomePage');
+          break;
+        default:
+          toast.error('Rôle non autorisé.');
+          break;
+      }
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.message ||
+        'Échec de la connexion. Veuillez vérifier vos identifiants.';
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12">
@@ -106,6 +102,7 @@ const handleSubmit = async (e: FormEvent) => {
                   className="input"
                   placeholder="exemple@email.com"
                   required
+                  disabled={isLoading}
                 />
               </div>
 
@@ -123,6 +120,7 @@ const handleSubmit = async (e: FormEvent) => {
                     className="input pr-10"
                     placeholder="••••••••"
                     required
+                    disabled={isLoading}
                   />
                   <button
                     type="button"

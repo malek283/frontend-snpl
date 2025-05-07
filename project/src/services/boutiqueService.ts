@@ -7,6 +7,19 @@ export const getCategoryBoutiques = async (): Promise<CategoryBoutique[]> => {
   return response.data;
 };
 
+export const getBoutiquesall = async (): Promise<Boutique[]> => {
+  try {
+    const response = await api.get('boutique/boutiques/all/');
+    return response.data;
+  } catch (error: any) {
+    console.error('Error fetching boutiques:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
+    throw new Error(error.response?.data?.detail || 'Failed to fetch boutiques');
+  }
+};
 // Boutique Services
 export const createBoutique = async (boutiqueData: FormData): Promise<Boutique> => {
   try {
@@ -159,7 +172,7 @@ export const updateCategoryProduit = async (
       formData.append(key, value as string | Blob);
     }
   });
-  const response = await api.put<CategoryProduit>(`boutique/category_produits/${id}/`, formData, {
+  const response = await api.put<CategoryProduit>(`boutique/boutique/category_produits/${id}/`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
@@ -167,4 +180,82 @@ export const updateCategoryProduit = async (
 
 export const deleteCategoryProduit = async (id: number): Promise<void> => {
   await api.delete(`boutique/category_produits/${id}/`);
+};
+// boutiqueService.ts
+export const getAllBoutiques = async (
+  page: number = 1,
+  pageSize: number = 10
+): Promise<{
+  success: boolean;
+  boutiques: Boutique[];
+  count: number;
+  total_pages: number;
+  current_page: number;
+  error?: string;
+}> => {
+  try {
+    const response = await api.get('/boutique/boutiquesall/', {
+      params: { page, page_size: pageSize },
+    });
+    return {
+      success: true,
+      boutiques: response.data.boutiques || [],
+      count: response.data.count || 0,
+      total_pages: response.data.total_pages || 1,
+      current_page: response.data.current_page || 1,
+    };
+  } catch (error: any) {
+    console.error('Error in getAllBoutiques:', error);
+    return {
+      success: false,
+      boutiques: [],
+      count: 0,
+      total_pages: 1,
+      current_page: 1,
+      error: error.message || 'Failed to fetch boutiques',
+    };
+  }
+};
+export const approveBoutique = async (
+  boutiqueId: number
+): Promise<{ success: boolean; boutique?: Boutique; message?: string; error?: string }> => {
+  try {
+    const response = await api.post(`/boutique/${boutiqueId}/approve/`);
+    return {
+      success: true,
+      boutique: response.data.boutique,
+      message: response.data.message,
+    };
+  } catch (error: any) {
+    console.error(`Error approving boutique ${boutiqueId}:`, error);
+    return { success: false, error: error.response?.data?.error || error.message };
+  }
+};
+
+export const rejectBoutique = async (
+  boutiqueId: number
+): Promise<{ success: boolean; boutique?: Boutique; message?: string; error?: string }> => {
+  try {
+    const response = await api.post(`/boutique/${boutiqueId}/reject/`);
+    return {
+      success: true,
+      boutique: response.data.boutique,
+      message: response.data.message,
+    };
+  } catch (error: any) {
+    console.error(`Error rejecting boutique ${boutiqueId}:`, error);
+    return { success: false, error: error.response?.data?.error || error.message };
+  }
+};
+
+export const deleteBoutique = async (
+  boutiqueId: number
+): Promise<{ success: boolean; message?: string; error?: string }> => {
+  try {
+    const response = await api.delete(`/boutique/${boutiqueId}/delete/`);
+    return { success: true, message: response.data.message };
+  } catch (error: any) {
+    console.error(`Error deleting boutique ${boutiqueId}:`, error);
+    return { success: false, error: error.response?.data?.error || error.message };
+  }
 };

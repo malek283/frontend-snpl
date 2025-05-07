@@ -9,11 +9,11 @@ import {
   MessageSquare,
   MessageCircle, 
   Settings, 
-  X, 
-  Users
+  Users,
+  Percent
 } from 'lucide-react';
 
-type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages';
+type ActiveSection = 'overview' | 'products' | 'store' | 'orders' | 'payments' | 'notifications' | 'support' | 'settings' | 'messages' | 'remise' | 'users';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,17 +30,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeSection, setActiveSecti
     console.log('Sidebar section clicked:', section);
     setActiveSection(section);
   };
+
   const navigationItems = [
     { id: 'overview', name: 'Vue d\'ensemble', icon: <LayoutDashboard size={20} /> },
     { id: 'products', name: 'Produits', icon: <ShoppingBag size={20} /> },
     { id: 'store', name: 'Boutique', icon: <Store size={20} /> },
     { id: 'orders', name: 'Commandes', icon: <ClipboardList size={20} /> },
     { id: 'payments', name: 'Paiements', icon: <CreditCard size={20} /> },
-    { id: 'messages', name: 'Messages Clients', icon: <MessageCircle size={20} /> },
+    { id: 'remise', name: 'remise', icon: <Percent size={20} /> },
+    { id: 'users', name: 'Utilisateurs', icon: <Users size={20} /> },
+    { id: 'messages', name: 'Messages', icon: <MessageCircle size={20} /> },
     { id: 'notifications', name: 'Notifications', icon: <Bell size={20} /> },
     { id: 'support', name: 'Support', icon: <MessageSquare size={20} /> },
-    { id: 'settings', name: 'Paramètres', icon: <Settings size={20} /> },
-    { id: 'user', name: 'user', icon: <Users size={20} /> },
+    { id: 'settings', name: 'Paramètres', icon: <Settings size={20} /> }
   ];
 
   return (
@@ -61,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeSection, setActiveSecti
             {navigationItems.map((item) => (
               <li key={item.id} className="px-2 mb-1">
                 <button
-                  onClick={() => setActiveSection(item.id as ActiveSection)}
+                  onClick={() => handleSectionClick(item.id as ActiveSection)}
                   className={`
                     flex items-center w-full ${isOpen ? 'px-4' : 'px-0 md:px-0 md:justify-center'} py-3 rounded-lg
                     ${activeSection === item.id ? 'bg-blue-700' : 'hover:bg-blue-700/50 transition-colors duration-200'}

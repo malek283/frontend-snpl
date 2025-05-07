@@ -429,7 +429,7 @@ const ProductManagement: React.FC<ProductManagementProps> = ({ boutiqueId }) => 
                 />
                 <CardContent>
                   <Typography variant="h6" fontWeight="bold">{produit.nom}</Typography>
-                  <Typography variant="body2" color="text.secondary">Price: ${produit.prix}</Typography>
+                  <Typography variant="body2" color="text.secondary">Price: DT{produit.prix}</Typography>
                   <Typography variant="body2" color="text.secondary">Stock: {produit.stock}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Category: {produit.category_produit_details?.nom || 'N/A'}

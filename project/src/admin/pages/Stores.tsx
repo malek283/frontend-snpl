@@ -1,385 +1,437 @@
-import React, { useState } from 'react';
-import { Search, Filter, Plus, Trash2, Edit, Eye, Check, X, ArrowUp, ArrowDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, Trash2, Edit, Eye } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { getAllBoutiques, createBoutique, deleteBoutique, getBoutiquesall } from '../../services/boutiqueService';
+import { getCategories } from '../../services/categorieService';
+import { Boutique, CategoryBoutique } from '../../types';
+import { useAuthStore } from '../../components/Store/authStore';
 
 const Stores: React.FC = () => {
-  const [view, setView] = useState<'list' | 'grid'>('list');
-  
-  const stores = [
-    { 
-      id: 1, 
-      name: 'Tech Gadgets Store', 
-      owner: 'John Smith', 
-      category: 'Electronics',
-      products: 156, 
-      revenue: '$25,430.50', 
-      rating: 4.8,
-      status: 'active',
-      featured: true,
-      image: 'https://images.pexels.com/photos/1402787/pexels-photo-1402787.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-    },
-    { 
-      id: 2, 
-      name: 'Fashion Trends', 
-      owner: 'Emily Johnson', 
-      category: 'Clothing',
-      products: 87, 
-      revenue: '$18,320.75', 
-      rating: 4.5,
-      status: 'active',
-      featured: false,
-      image: 'https://images.pexels.com/photos/3965545/pexels-photo-3965545.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-    },
-    { 
-      id: 3, 
-      name: 'Home Decor Plus', 
-      owner: 'Michael Brown', 
-      category: 'Home & Garden',
-      products: 104, 
-      revenue: '$12,645.30', 
-      rating: 4.2,
-      status: 'pending',
-      featured: false,
-      image: 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-    },
-    { 
-      id: 4, 
-      name: 'Organic Foods Co.', 
-      owner: 'Sarah Wilson', 
-      category: 'Food & Beverage',
-      products: 68, 
-      revenue: '$9,875.25', 
-      rating: 4.7,
-      status: 'active',
-      featured: true,
-      image: 'https://images.pexels.com/photos/8540151/pexels-photo-8540151.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-    },
-    { 
-      id: 5, 
-      name: 'Sports Equipment Pro', 
-      owner: 'David Miller', 
-      category: 'Sports',
-      products: 112, 
-      revenue: '$15,320.00', 
-      rating: 4.0,
-      status: 'suspended',
-      featured: false,
-      image: 'https://images.pexels.com/photos/3622614/pexels-photo-3622614.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-    },
-    { 
-      id: 6, 
-      name: 'Kids Toys World', 
-      owner: 'Jennifer Davis', 
-      category: 'Toys & Games',
-      products: 94, 
-      revenue: '$7,645.80', 
-      rating: 4.4,
-      status: 'active',
-      featured: false,
-      image: 'https://images.pexels.com/photos/163429/toy-car-toy-box-mini-163429.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2'
-    }
-  ];
+  const [boutiques, setBoutiques] = useState<Boutique[]>([]);
+  const [filteredBoutiques, setFilteredBoutiques] = useState<Boutique[]>([]);
+  const [categories, setCategories] = useState<CategoryBoutique[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    pageSize: 10,
+    totalCount: 0,
+  });
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newBoutique, setNewBoutique] = useState({
+    nom: '',
+    description: '',
+    adresse: '',
+    telephone: '',
+    email: '',
+    category_boutique: '',
+    logo: null as File | null,
+    image: null as File | null,
+  });
+  const { user } = useAuthStore();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'suspended':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  // Update pagination based on filtered boutiques
+  const updatePagination = (boutiques: Boutique[]) => {
+    const totalCount = boutiques.length;
+    const totalPages = Math.ceil(totalCount / pagination.pageSize);
+    setPagination((prev) => ({
+      ...prev,
+      totalCount,
+      totalPages: totalPages || 1, // Ensure at least 1 page
+      currentPage: Math.min(prev.currentPage, totalPages || 1), // Adjust currentPage if it exceeds totalPages
+    }));
+  };
+
+  // Fetch boutiques
+  const fetchBoutiques = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const boutiques = await getBoutiquesall();
+      setBoutiques(boutiques);
+      setFilteredBoutiques(boutiques);
+      updatePagination(boutiques); // Update pagination after fetching
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch boutiques';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      console.error('Fetch boutiques error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderRating = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
-    
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(
-        <svg key={`full-${i}`} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.799-2.034c-.784-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
+  // Fetch categories and boutiques on mount
+  useEffect(() => {
+    fetchBoutiques();
+    const fetchCategories = async () => {
+      try {
+        const categoriesData = await getCategories();
+        setCategories(categoriesData);
+      } catch (err: any) {
+        console.error('Fetch categories error:', err);
+        toast.error('Failed to fetch categories');
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Filter boutiques and update pagination
+  useEffect(() => {
+    let result = boutiques;
+    if (searchTerm) {
+      result = result.filter(
+        (boutique) =>
+          boutique.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          boutique.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          boutique.telephone?.includes(searchTerm)
       );
     }
-    
-    if (hasHalfStar) {
-      stars.push(
-        <svg key="half" className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-          <defs>
-            <linearGradient id="halfGradient">
-              <stop offset="50%" stopColor="currentColor" />
-              <stop offset="50%" stopColor="#D1D5DB" />
-            </linearGradient>
-          </defs>
-          <path fill="url(#halfGradient)" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.799-2.034c-.784-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
+    setFilteredBoutiques(result);
+    updatePagination(result); // Update pagination after filtering
+  }, [searchTerm, boutiques]);
+
+  // Handle delete
+  const handleDelete = async (boutiqueId: number) => {
+    if (window.confirm('Are you sure you want to delete this boutique?')) {
+      try {
+        await deleteBoutique(boutiqueId);
+        const updatedBoutiques = boutiques.filter((b) => b.id !== boutiqueId);
+        setBoutiques(updatedBoutiques);
+        setFilteredBoutiques(updatedBoutiques);
+        updatePagination(updatedBoutiques); // Update pagination after deletion
+        toast.success('Boutique deleted successfully');
+      } catch (err: any) {
+        const errorMessage = err.message || 'Failed to delete boutique';
+        toast.error(errorMessage);
+        console.error('Delete boutique error:', err);
+      }
+    }
+  };
+
+  // Handle add boutique
+  const handleAddBoutique = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBoutique.nom || !newBoutique.category_boutique) {
+      toast.error('Name and category are required');
+      return;
+    }
+    if (newBoutique.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newBoutique.email)) {
+      toast.error('Invalid email format');
+      return;
+    }
+    const formData = new FormData();
+    Object.entries(newBoutique).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        formData.append(key, value as string | Blob);
+      }
+    });
+    if (user?.id) {
+      formData.append('marchand', user.id.toString());
+    }
+    try {
+      const boutique = await createBoutique(formData);
+      const updatedBoutiques = [...boutiques, boutique];
+      setBoutiques(updatedBoutiques);
+      setFilteredBoutiques(updatedBoutiques);
+      updatePagination(updatedBoutiques); // Update pagination after adding
+      setShowAddModal(false);
+      setNewBoutique({
+        nom: '',
+        description: '',
+        adresse: '',
+        telephone: '',
+        email: '',
+        category_boutique: '',
+        logo: null,
+        image: null,
+      });
+      toast.success('Boutique created successfully');
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create boutique';
+      toast.error(errorMessage);
+      console.error('Create boutique error:', err);
+    }
+  };
+
+  // Pagination
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= pagination.totalPages) {
+      setPagination((prev) => ({ ...prev, currentPage: page }));
+    }
+  };
+
+  // Render page buttons dynamically
+  const renderPageButtons = () => {
+    const { currentPage, totalPages } = pagination;
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+    // Adjust startPage if endPage is at the limit
+    if (endPage - startPage + 1 < maxButtons) {
+      startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+
+    const buttons = [];
+    for (let page = startPage; page <= endPage; page++) {
+      buttons.push(
+        <button
+          key={page}
+          onClick={() => handlePageChange(page)}
+          className={`px-4 py-2 border rounded-lg ${
+            currentPage === page ? 'bg-indigo-100 text-indigo-700' : ''
+          }`}
+        >
+          {page}
+        </button>
       );
     }
-    
-    const emptyStars = 5 - stars.length;
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <svg key={`empty-${i}`} className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118l-2.799-2.034c-.784-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-      );
-    }
-    
+    return buttons;
+  };
+
+  if (loading) {
     return (
-      <div className="flex items-center">
-        {stars}
-        <span className="ml-1 text-xs font-medium text-gray-600">{rating.toFixed(1)}</span>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
       </div>
     );
-  };
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 text-red-600 rounded-lg">
+        {error}
+        <button
+          onClick={fetchBoutiques}
+          className="ml-4 px-4 py-2 bg-red-100 rounded-lg hover:bg-red-200"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-xl font-semibold text-gray-900">Store Management</h2>
-        <button className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
-          <Plus size={16} className="mr-2" />
-          Add New Store
+    <div className="container mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Boutique Management</h1>
+        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <Plus className="mr-2" /> Add Boutique
         </button>
       </div>
 
-      {/* Filters and Search */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={18} className="text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search stores..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          
-          <div className="flex gap-2">
-            <button className="px-4 py-2 border border-gray-300 rounded-lg flex items-center hover:bg-gray-50">
-              <Filter size={16} className="mr-2 text-gray-500" />
-              <span>Filters</span>
-            </button>
-            
-            <div className="hidden sm:flex border border-gray-300 rounded-lg overflow-hidden">
-              <button 
-                onClick={() => setView('list')}
-                className={`px-3 py-2 ${view === 'list' ? 'bg-gray-100' : 'bg-white'}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                  <line x1="8" y1="6" x2="21" y2="6"></line>
-                  <line x1="8" y1="12" x2="21" y2="12"></line>
-                  <line x1="8" y1="18" x2="21" y2="18"></line>
-                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
-                </svg>
-              </button>
-              <button 
-                onClick={() => setView('grid')}
-                className={`px-3 py-2 ${view === 'grid' ? 'bg-gray-100' : 'bg-white'}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                  <rect x="3" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="14" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
-              </button>
-            </div>
+      {/* Add Boutique Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Add New Boutique</h2>
+            <form onSubmit={handleAddBoutique}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Name</label>
+                <input
+                  type="text"
+                  value={newBoutique.nom}
+                  onChange={(e) => setNewBoutique({ ...newBoutique, nom: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Description</label>
+                <textarea
+                  value={newBoutique.description}
+                  onChange={(e) => setNewBoutique({ ...newBoutique, description: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Address</label>
+                <input
+                  type="text"
+                  value={newBoutique.adresse}
+                  onChange={(e) => setNewBoutique({ ...newBoutique, adresse: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Phone</label>
+                <input
+                  type="text"
+                  value={newBoutique.telephone}
+                  onChange={(e) => setNewBoutique({ ...newBoutique, telephone: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  value={newBoutique.email}
+                  onChange={(e) => setNewBoutique({ ...newBoutique, email: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Category</label>
+                <select
+                  value={newBoutique.category_boutique}
+                  onChange={(e) =>
+                    setNewBoutique({ ...newBoutique, category_boutique: e.target.value })
+                  }
+                  className="w-full border rounded-lg px-3 py-2"
+                  required
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.nom}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Logo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setNewBoutique({ ...newBoutique, logo: e.target.files?.[0] || null })}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium">Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setNewBoutique({ ...newBoutique, image: e.target.files?.[0] || null })}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="mr-2 px-4 py-2 bg-gray-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-        {[
-          { title: 'Total Stores', value: '487', change: '+8%', changeType: 'positive' },
-          { title: 'Active Stores', value: '412', change: '+5%', changeType: 'positive' },
-          { title: 'Pending Approval', value: '45', change: '-12%', changeType: 'negative' },
-          { title: 'Average Revenue', value: '$12,430', change: '+15%', changeType: 'positive' }
-        ].map((stat, index) => (
-          <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h3 className="text-xl font-semibold text-gray-900">{stat.value}</h3>
-            <p className="text-sm text-gray-500">{stat.title}</p>
-            <div className="mt-2 flex items-center">
-              {stat.changeType === 'positive' ? (
-                <div className="flex items-center text-emerald-600">
-                  <ArrowUp size={16} />
-                  <span className="ml-1 text-sm font-medium">{stat.change}</span>
-                </div>
-              ) : (
-                <div className="flex items-center text-red-600">
-                  <ArrowDown size={16} />
-                  <span className="ml-1 text-sm font-medium">{stat.change}</span>
-                </div>
-              )}
-              <span className="text-xs text-gray-500 ml-2">from last month</span>
-            </div>
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
+          <div className="relative flex-grow">
+            <Search className="absolute left-3 top-3 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search boutiques..."
+              className="pl-10 pr-4 py-2 w-full border rounded-lg"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Stores Display */}
-      {view === 'list' ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Store</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Products</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Featured</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {stores.map((store) => (
-                  <tr key={store.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white">
+            <thead>
+              <tr className="bg-gray-100 text-left">
+                <th className="py-3 px-4">Name</th>
+                <th className="py-3 px-4">Category</th>
+                <th className="py-3 px-4">Marchand</th>
+                <th className="py-3 px-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBoutiques
+                .slice(
+                  (pagination.currentPage - 1) * pagination.pageSize,
+                  pagination.currentPage * pagination.pageSize
+                )
+                .map((boutique) => (
+                  <tr key={boutique.id} className="border-t hover:bg-gray-50">
+                    <td className="py-3 px-4">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-lg bg-gray-200 overflow-hidden">
-                          <img 
-                            src={store.image} 
-                            alt={store.name}
-                            className="h-full w-full object-cover"
+                        {boutique.logo && (
+                          <img
+                            src={`http://localhost:8000${boutique.logo}`}
+                            alt={boutique.nom || 'Boutique'}
+                            className="w-10 h-10 rounded-full mr-3"
                           />
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{store.name}</div>
-                          <div className="text-xs text-gray-500">Owner: {store.owner}</div>
+                        )}
+                        <div>
+                          <div className="font-medium">{boutique.nom || 'Unnamed Boutique'}</div>
+                          <div className="text-sm text-gray-500">{boutique.email || 'No email'}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {store.category}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {store.products}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {store.revenue}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {renderRating(store.rating)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${getStatusColor(store.status)}`}>
-                        {store.status.charAt(0).toUpperCase() + store.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {store.featured ? (
-                        <span className="inline-flex items-center justify-center w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full">
-                          <Check size={14} />
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center justify-center w-6 h-6 bg-gray-100 text-gray-400 rounded-full">
-                          <X size={14} />
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                      <div className="flex justify-end items-center space-x-2">
-                        <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-blue-600" title="View Details">
-                          <Eye size={16} />
+                    <td className="py-3 px-4">{boutique.category_boutique?.nom || 'N/A'}</td>
+                    <td className="py-3 px-4">{boutique.marchand?.user?.nom || 'N/A'}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex space-x-2">
+                        <button className="p-1 text-blue-500 hover:text-blue-700">
+                          <Eye />
                         </button>
-                        <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="Edit">
-                          <Edit size={16} />
+                        <button className="p-1 text-indigo-500 hover:text-indigo-700">
+                          <Edit />
                         </button>
-                        <button className="p-1 rounded-full hover:bg-gray-100 text-gray-500 hover:text-red-600" title="Delete">
-                          <Trash2 size={16} />
+                        <button
+                          className="p-1 text-red-500 hover:text-red-700"
+                          onClick={() => handleDelete(boutique.id)}
+                        >
+                          <Trash2 />
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-between items-center">
-            <p className="text-sm text-gray-500">Showing 1-6 of 487 stores</p>
-            <div className="flex space-x-1">
-              <button className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+            </tbody>
+          </table>
+        </div>
+
+        {filteredBoutiques.length === 0 && (
+          <div className="text-center py-8 text-gray-500">No boutiques found</div>
+        )}
+
+        {filteredBoutiques.length > 0 && (
+          <div className="flex justify-between items-center mt-4">
+            <div>
+              Showing {(pagination.currentPage - 1) * pagination.pageSize + 1} to{' '}
+              {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalCount)} of{' '}
+              {pagination.totalCount} boutiques
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={pagination.currentPage === 1}
+                className="px-4 py-2 border rounded-lg disabled:opacity-50"
+              >
                 Previous
               </button>
-              <button className="px-3 py-1 border border-gray-300 bg-indigo-50 text-indigo-600 font-medium rounded text-sm">
-                1
-              </button>
-              <button className="px-3 py-1 border border-gray-300 rounded text-sm">
-                2
-              </button>
-              <button className="px-3 py-1 border border-gray-300 rounded text-sm">
-                3
-              </button>
-              <button className="px-3 py-1 border border-gray-300 rounded text-sm">
+              {renderPageButtons()}
+              <button
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={pagination.currentPage === pagination.totalPages}
+                className="px-4 py-2 border rounded-lg disabled:opacity-50"
+              >
                 Next
               </button>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {stores.map((store) => (
-            <div key={store.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="h-40 bg-gray-200 relative">
-                <img 
-                  src={store.image} 
-                  alt={store.name}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute top-3 right-3 flex space-x-2">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(store.status)}`}>
-                    {store.status.charAt(0).toUpperCase() + store.status.slice(1)}
-                  </span>
-                  {store.featured && (
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800">
-                      Featured
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="text-lg font-medium text-gray-900">{store.name}</h3>
-                <p className="text-sm text-gray-500 mb-3">Owner: {store.owner}</p>
-                
-                <div className="mt-2 flex justify-between items-center">
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">{store.products}</span> products
-                  </div>
-                  {renderRating(store.rating)}
-                </div>
-                
-                <div className="mt-3 flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">{store.category}</span>
-                  <span className="text-sm font-semibold text-gray-900">{store.revenue}</span>
-                </div>
-              </div>
-              <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 flex justify-end space-x-2">
-                <button className="p-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200" title="View Details">
-                  <Eye size={16} />
-                </button>
-                <button className="p-1.5 rounded-lg bg-indigo-100 text-indigo-600 hover:bg-indigo-200" title="Edit">
-                  <Edit size={16} />
-                </button>
-                <button className="p-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200" title="Delete">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

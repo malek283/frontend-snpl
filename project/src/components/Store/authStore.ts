@@ -8,8 +8,11 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  boutiqueId: number | null; // Nouveau champ
+  
   setTokens: (data: LoginResponse) => void;
   logout: () => void;
+  setBoutiqueId: (id: number) => void; // Nouvelle méthode
 }
 
 const logMiddleware = (config: (set: any, get: any, api: any) => any) => (set: (arg0: any) => void, get: any, api: any) =>
@@ -17,7 +20,11 @@ const logMiddleware = (config: (set: any, get: any, api: any) => any) => (set: (
     (...args: [any]) => {
       const [newState] = args;
       if (newState && (newState.user !== get().user || newState.accessToken !== get().accessToken)) {
-        console.log('useAuthStore state change:', { user: newState.user, accessToken: newState.accessToken });
+        console.log('useAuthStore state change:', { 
+          user: newState.user, 
+          accessToken: newState.accessToken,
+          boutiqueId: newState.boutiqueId 
+        });
       }
       set(...args);
     },
@@ -33,20 +40,29 @@ export const useAuthStore = create<AuthState>()(
         accessToken: null,
         refreshToken: null,
         isAuthenticated: false,
+        boutiqueId: null, // Initialisé à null
+        
         setTokens: (data: LoginResponse) => {
           set({
             user: data.user ? { ...data.user } : null,
             accessToken: data.access_token,
             refreshToken: data.refresh_token,
             isAuthenticated: !!data.user && !!data.access_token,
+            boutiqueId: data.user?.boutiqueId || null // Récupération du boutiqueId depuis la réponse
           });
         },
+        
+        setBoutiqueId: (id: number) => {
+          set({ boutiqueId: id });
+        },
+        
         logout: () => {
           set({
             user: null,
             accessToken: null,
             refreshToken: null,
             isAuthenticated: false,
+            boutiqueId: null // Réinitialisation
           });
         },
       }),
@@ -58,6 +74,7 @@ export const useAuthStore = create<AuthState>()(
           accessToken: state.accessToken,
           refreshToken: state.refreshToken,
           isAuthenticated: state.isAuthenticated,
+          boutiqueId: state.boutiqueId // Ajouté à la persistance
         }),
         merge: (persisted: any, current: AuthState) => {
           const mergedState = {

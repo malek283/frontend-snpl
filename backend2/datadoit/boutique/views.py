@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from users.models import Marchand
 from .models import Boutique, CategoryBoutique, CategoryProduit, Produit
-from .serializers import BoutiqueSerializer, CategoryBoutiqueSerializer, CategoryProduitSerializer, ProduitSerializer
+from .serializers import BoutiqueSerializer, BoutiqueSerializerall, CategoryBoutiqueSerializer, CategoryProduitSerializer, ProduitSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -474,3 +474,112 @@ def boutique_detail_public(request, boutique_id):
         return Response(response_data)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def all_boutiques(request):
+    try:
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        
+        boutiques = Boutique.objects.filter(status='approved').select_related('marchand', 'category_boutique')
+        
+        # Pagination
+        total_count = boutiques.count()
+        total_pages = (total_count + page_size - 1) // page_size
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        paginated_boutiques = boutiques[start_index:end_index]
+        
+        serializer = BoutiqueSerializer(paginated_boutiques, many=True, context={'request': request})
+        
+        return Response({
+            "success": True,
+            "count": total_count,
+            "total_pages": total_pages,
+            "current_page": page,
+            "boutiques": serializer.data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching all boutiques: {str(e)}")
+        return Response(
+            {"success": False, "error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def approve_boutique(request, pk):
+    try:
+        boutique = get_object_or_404(Boutique, pk=pk)
+        if boutique.status == 'approved':
+            return Response({'error': 'Boutique is already approved'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        boutique.status = 'approved'
+        boutique.save()
+        
+        serializer = BoutiqueSerializer(boutique, context={'request': request})
+        logger.info(f"Boutique {boutique.nom} (ID: {pk}) approved by user {request.user.username}")
+        response = Response({
+            'message': f'Boutique {boutique.nom} has been approved',
+            'boutique': serializer.data
+        })
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+    except Exception as e:
+        logger.error(f"Error approving boutique {pk}: {str(e)}")
+        return Response({'error': 'An error occurred while approving the boutique'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_boutique(request, pk):
+    try:
+        boutique = get_object_or_404(Boutique, pk=pk)
+        if boutique.status == 'rejected':
+            return Response({'error': 'Boutique is already rejected'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        boutique.status = 'rejected'
+        boutique.save()
+        
+        serializer = BoutiqueSerializer(boutique, context={'request': request})
+        logger.info(f"Boutique {boutique.nom} (ID: {pk}) rejected by user {request.user.username}")
+        response = Response({
+            'message': f'Boutique {boutique.nom} has been rejected',
+            'boutique': serializer.data
+        })
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+    except Exception as e:
+        logger.error(f"Error rejecting boutique {pk}: {str(e)}")
+        return Response({'error': 'An error occurred while rejecting the boutique'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_boutique(request, pk):
+    try:
+        boutique = get_object_or_404(Boutique, pk=pk)
+        boutique_name = boutique.nom
+        boutique.delete()
+        
+        logger.info(f"Boutique {boutique_name} (ID: {pk}) deleted by user {request.user.username}")
+        response = Response({
+            'message': f'Boutique {boutique_name} has been deleted'
+        })
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
+    except Exception as e:
+        logger.error(f"Error deleting boutique {pk}: {str(e)}")
+        return Response({'error': 'An error occurred while deleting the boutique'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_boutiques(request):
+  
+    try:
+        boutiques = Boutique.objects.all()
+        serializer = BoutiqueSerializerall(boutiques, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {"detail": f"Error retrieving boutiques: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

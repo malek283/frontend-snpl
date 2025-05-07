@@ -84,7 +84,7 @@ export const deleteCategoryProduit = async (id: number): Promise<void> => {
   await api.delete(`boutique/category-produits/${id}/`);
 };
 
-export const getBoutiques = async (): Promise<Boutique[]> => {
+export const getBoutiques = async (currentPage: number, pageSize: number): Promise<Boutique[]> => {
   const response = await api.get<Boutique[]>('boutique/boutiques/');
   console.log('getBoutiques response:', response.data);
   return response.data;

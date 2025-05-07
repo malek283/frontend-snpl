@@ -14,11 +14,11 @@ User = get_user_model()
 
 
 
-
 class UserSerializer(serializers.ModelSerializer):
-    solde_points = serializers.IntegerField(source='client.solde_points', read_only=True, required=False)
-    historique_achats = serializers.CharField(source='client.historique_achats', read_only=True, required=False)
-  
+    solde_points = serializers.IntegerField(source='client_profile.solde_points', read_only=True, required=False)
+    historique_achats = serializers.CharField(source='client_profile.historique_achats', read_only=True, required=False)
+    referral_code = serializers.CharField(source='client_profile.referral_code', read_only=True, required=False)
+    nombre_clients_parraines = serializers.IntegerField(source='client_profile.nombre_clients_parraines', read_only=True, required=False)
     has_boutique = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -26,27 +26,24 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'nom', 'prenom', 'telephone', 'role',
             'is_active', 'is_approved', 'is_staff', 'created_at', 'updated_at',
-            'solde_points', 'historique_achats',
+            'solde_points', 'historique_achats', 'referral_code', 'nombre_clients_parraines',
             'has_boutique'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'is_staff', 'is_approved']
 
-    
-
-   
-
     def get_has_boutique(self, obj):
-        if obj.role == 'marchand' and hasattr(obj, 'marchand_profile'):
-           return Boutique.objects.filter(marchand=obj.marchand_profile).exists()
+        if obj.role.lower() == 'marchand' and hasattr(obj, 'marchand_profile'):
+            return Boutique.objects.filter(marchand=obj.marchand_profile).exists()
         return False
-
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        if instance.role != 'client':
+        if instance.role.lower() != 'client':
             representation.pop('solde_points', None)
             representation.pop('historique_achats', None)
-        if instance.role != 'marchand':
+            representation.pop('referral_code', None)
+            representation.pop('nombre_clients_parraines', None)
+        if instance.role.lower() != 'marchand':
             representation.pop('has_boutique', None)
         return representation
 
@@ -70,10 +67,12 @@ User = get_user_model()
 class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
-        fields = ['solde_points', 'historique_achats']
+        fields = ['solde_points', 'historique_achats', 'referral_code', 'nombre_clients_parraines']
         extra_kwargs = {
             'solde_points': {'default': 0, 'allow_null': True, 'required': False},
-            'historique_achats': {'allow_blank': True, 'allow_null': True, 'required': False}
+            'historique_achats': {'allow_blank': True, 'allow_null': True, 'required': False},
+            'referral_code': {'read_only': True},
+            'nombre_clients_parraines': {'read_only': True},
         }
 
 class MarchandSerializer(serializers.ModelSerializer):
@@ -93,57 +92,70 @@ class AdminSerializer(serializers.ModelSerializer):
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
-    
+    referral_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     class Meta:
         model = User
         fields = [
             'email', 'nom', 'prenom', 'telephone', 'adresse', 'role',
-            'password', 'confirm_password'
+            'password', 'confirm_password', 'referral_code'
         ]
-      
+
     def validate(self, data):
         if data['password'] != data['confirm_password']:
             raise serializers.ValidationError({"confirm_password": "Les mots de passe ne correspondent pas."})
-        
+
         if User.objects.filter(email=data['email'].lower()).exists():
             raise serializers.ValidationError({"email": "Cet email est déjà utilisé."})
-        
+
+        referral_code = data.get('referral_code')
+        if referral_code:
+            try:
+                Client.objects.get(referral_code=referral_code)
+            except Client.DoesNotExist:
+                raise serializers.ValidationError({"referral_code": "Code de parrainage invalide."})
+
         return data
 
     @transaction.atomic
     def create(self, validated_data):
         try:
-            # Extraction et normalisation des données
             role = validated_data.pop('role', 'client')
             validated_data.pop('confirm_password')
+            referral_code = validated_data.pop('referral_code', None)
             validated_data['email'] = validated_data['email'].lower()
-            
-            # FORCE le rôle dans les données de création
             validated_data['role'] = role
-            
-            # Création de l'utilisateur
+
+            # Ensure required fields are present
+            required_fields = ['email', 'nom', 'prenom', 'telephone']
+            for field in required_fields:
+                if not validated_data.get(field):
+                    raise serializers.ValidationError({field: f"Le champ {field} est requis."})
+
             user = User.objects.create_user(**validated_data)
-          
-            if role == 'client' and not hasattr(user, 'client_profile'):
-              Client.objects.create(user=user)
-            elif role == 'marchand' and not hasattr(user, 'marchand_profile'):
-              Marchand.objects.create(user=user)
-            elif role == 'admin' and not hasattr(user, 'admin_profile'):
-              Admin.objects.create(user=user)
-            
-            # Recharge l'utilisateur pour s'assurer d'avoir les dernières données
+
+            # Rely on post_save signal for Client/Marchand/Admin profile creation
+            # Only handle referral code logic here if needed
+            if role == 'client' and referral_code:
+                try:
+                    referrer = Client.objects.get(referral_code=referral_code)
+                    referrer.nombre_clients_parraines += 1
+                    referrer.save()
+                except Client.DoesNotExist:
+                    raise serializers.ValidationError({"referral_code": "Code de parrainage invalide."})
+
             user.refresh_from_db()
             return user
-            
+
         except IntegrityError as e:
-            logger.error(f"IntegrityError: {str(e)}")
+            logger.error(f"IntegrityError during signup: {str(e)}")
             raise serializers.ValidationError({
-                'error': 'Erreur lors de la création du compte.'
+                'error': 'Erreur lors de la création du compte. Vérifiez les données fournies.'
             })
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+            logger.error(f"Unexpected error during signup: {str(e)}", exc_info=True)
             raise serializers.ValidationError({
-                'error': 'Une erreur inattendue est survenue.'
+                'error': f'Une erreur inattendue est survenue: {str(e)}'
             })
 class UserUpdateSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=False)

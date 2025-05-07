@@ -7,7 +7,7 @@ export interface UserSignupData {
   role: string;
   password: string;
   confirm_password: string;
-  
+  referral_code?: string;
 }
 
 export interface UserLoginData {
@@ -21,6 +21,9 @@ export interface User {
   nom: string;
   prenom: string;
   role: 'Client' | 'Marchand' | 'Admin';
+  boutiqueId: number | null;
+  referral_code?: string;
+  nombre_clients_parraines?: number;
 }
 
 export interface LoginResponse {
@@ -90,14 +93,15 @@ export interface Vendor {
 export interface Boutique {
   id: number;
   nom: string;
-  description: string;
-  logo?: string | File;
+  description?: string;
+  logo?: string;
   adresse?: string;
   telephone?: string;
   email?: string;
-  image?: string | File;
-  category_boutique: number | CategoryBoutique;
-  marchand: number;
+  image?: string;
+  category_boutique: CategoryBoutique;
+  marchand: Marchand;
+  status: 'approved' | 'pending' | 'rejected';
   created_at: string;
   updated_at: string;
 }
@@ -197,4 +201,66 @@ export interface BoutiqueUpdatePayload {
 export interface ApiError {
   error?: string;
   [key: string]: any;
+}
+export interface RemiseType {
+  id: number;
+  boutique: number | null;
+  duree_plan_paiement: string;
+  type_remise: string;
+  type_remise_display: string;
+  nombre_tranches: number | null;
+  pourcentage_remise: number;
+  montant_max_remise: number | null;
+  date_creation: string;
+}
+
+export interface RemiseTypeCreatePayload {
+  duree_plan_paiement_number: string;
+  duree_plan_paiement_unit: string;
+  type_remise: string;
+  nombre_tranches: string | number | null;
+  pourcentage_remise: string | number;
+  montant_max_remise: string | number | null;
+  boutique: string | number | null;
+}
+// Interface for a Cart Line Item (LignePanier)
+export interface LignePanier {
+  id: number;
+  produit: Produit;
+  quantite: number;
+  created_at: string;
+}
+
+// Interface for a Cart (Panier)
+export interface Panier {
+  id: number;
+  client: number;
+  lignes: LignePanier[];
+  created_at: string;
+  updated_at: string;
+}
+
+// Interface for an Order (Echange)
+export interface Order {
+  id: number;
+  boutique: string;
+  montant: number;
+  created_at: string;
+}
+
+// Interface for Shipping Information
+export interface ShippingInfo {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postalCode: string;
+}
+
+// Interface for Order Creation Payload (for future extensibility)
+export interface OrderCreatePayload {
+  shippingInfo?: ShippingInfo;
+  panierId?: number;
 }

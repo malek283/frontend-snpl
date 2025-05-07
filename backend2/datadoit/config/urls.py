@@ -1,6 +1,7 @@
 from django.urls import path
-from .views import configurer_list_create
+from .views import remise_type_list_create, remise_type_detail
 
 urlpatterns = [
-    path('configurers/', configurer_list_create, name='configurer-list-create'),
+    path('admin/remises-types/', remise_type_list_create, name='remise-type-list-create'),
+    path('admin/remises-types/<int:pk>/', remise_type_detail, name='remise-type-detail'),
 ]

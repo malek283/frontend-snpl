@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import logging
+import uuid
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,14 +73,25 @@ class Client(models.Model):
         primary_key=True,
         related_name='client_profile'
     )
-    solde_points = models.IntegerField(default=0 ,null=True)
-    historique_achats = models.TextField(blank=True, default='', null=True )
+    solde_points = models.IntegerField(default=0, null=True)
+    historique_achats = models.TextField(blank=True, default='', null=True)
+    referral_code = models.CharField(max_length=10, unique=True, blank=True, null=True)
+    nombre_clients_parraines = models.IntegerField(default=0)
 
     class Meta:
         db_table = 'clients'
 
     def __str__(self):
         return f"Client: {self.user.prenom} {self.user.nom}"
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            # Generate a unique referral code
+            code = self.user.prenom.upper()[:5] + str(uuid.uuid4())[:5].upper()
+            while Client.objects.filter(referral_code=code).exists():
+                code = self.user.prenom.upper()[:5] + str(uuid.uuid4())[:5].upper()
+            self.referral_code = code
+        super().save(*args, **kwargs)
 
 class Marchand(models.Model):
     user = models.OneToOneField(
@@ -121,3 +134,18 @@ def create_user_profile(sender, instance, created, **kwargs):
         elif instance.role == 'admin':
             Admin.objects.create(user=instance)
             logger.debug(f"Created Admin profile for user: {instance.email}")
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        if instance.role == 'client':
+            if not hasattr(instance, 'client_profile'):
+                Client.objects.create(user=instance)
+                logger.debug(f"Created Client profile for user: {instance.email}")
+        elif instance.role == 'marchand':
+            if not hasattr(instance, 'marchand_profile'):
+                Marchand.objects.create(user=instance)
+                logger.debug(f"Created Marchand profile for user: {instance.email}")
+        elif instance.role == 'admin':
+            if not hasattr(instance, 'admin_profile'):
+                Admin.objects.create(user=instance)
+                logger.debug(f"Created Admin profile for user: {instance.email}")

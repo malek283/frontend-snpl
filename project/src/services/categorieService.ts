@@ -2,7 +2,7 @@
 
 import api from '../axiosInstance';
 import { CategoryBoutique } from '../types';
-export const getCategories = async (p0: { cacheBust: number; }): Promise<CategoryBoutique[]> => {
+export const getCategories = async (): Promise<CategoryBoutique[]> => {
   console.log('getCategories')
   try {
     const response = await api.get(`/boutique/category_boutiques/`);

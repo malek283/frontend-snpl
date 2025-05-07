@@ -6,15 +6,26 @@ import api from '../axiosInstance';
 
 export class UserService {
   // Récupérer tous les utilisateurs
-  static async getUsers(): Promise<UserAdmin[]> {
+  static async getUsers(): Promise<User[]> {
     try {
-      const response: AxiosResponse<User[]> = await api.get(`/users/list/`);
-      return response.data as UserAdmin[];
-    } catch (error) {
-      console.error('Erreur lors de la récupération des utilisateurs:', error);
+      console.log('Fetching users from /users/list/');
+      const response = await api.get<User[]>('/users/list/');
+      console.log('Users fetched:', response.data);
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('Erreur lors de la récupération des utilisateurs:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      if (error.response?.status === 403) {
+        throw new Error('Accès refusé : seuls les administrateurs peuvent lister les utilisateurs.');
+      }
       throw error;
     }
-  }
+  };
+  
 
   // Récupérer un utilisateur par ID
   static async getUserById(id: number): Promise<UserAdmin> {

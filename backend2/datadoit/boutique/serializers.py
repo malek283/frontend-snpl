@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from users.models import Marchand
+from users.models import Marchand, User
 from .models import CategoryBoutique, Boutique, CategoryProduit, Produit
 import logging
 import os
@@ -411,3 +411,41 @@ class ProduitSerializer(serializers.ModelSerializer):
                     logger.error(f"Error updating image for Produit {instance.nom} (id: {instance.id}): {str(e)}")
                     raise
         return instance
+    
+
+class CategoryBoutiqueSerializerall(serializers.ModelSerializer):
+    class Meta:
+        model = CategoryBoutique
+        fields = ['id', 'nom']
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'nom', ]
+class MarchandSerializerall(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    class Meta:
+        model = Marchand
+        fields = [ 'is_marchant','user']
+
+class BoutiqueSerializerall(serializers.ModelSerializer):
+    category_boutique = CategoryBoutiqueSerializer(read_only=True)
+    marchand = MarchandSerializerall(read_only=True)
+
+    class Meta:
+        model = Boutique
+        fields = [
+            'id',
+            'nom',
+            'description',
+            'logo',
+            'adresse',
+            'telephone',
+            'email',
+            'image',
+            'category_boutique',
+            'marchand',
+            'created_at',
+            'updated_at'
+        ]    

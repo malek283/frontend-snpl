@@ -52,6 +52,7 @@ function App() {
               <Route path="/category-boutiques/:categoryId" element={<CategoryBoutiquesPage />} />
         <Route path="/boutique/:boutiqueId/categories" element={<BoutiqueCategoriesPage />} />
         <Route path="/boutique/:boutiqueId/category/:categoryId" element={<BoutiqueProductsPage />} />
+     
 
               
               

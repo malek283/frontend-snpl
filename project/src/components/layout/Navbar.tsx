@@ -13,7 +13,8 @@ import {
   Package,
   LogOut,
   UserCircle,
-  Mail 
+  Mail,
+  Share
 } from 'lucide-react';
 
 const Navbar = () => {
@@ -22,10 +23,20 @@ const Navbar = () => {
   const { items: wishlistItems } = useWishlist();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isReferralModalOpen, setIsReferralModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Debug auth state
+  console.log('Navbar Auth State:', { 
+    isAuthenticated, 
+    user, 
+    userRole: user?.role, 
+    isClient: user?.role?.toLowerCase() === 'client' 
+  });
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
+  const toggleReferralModal = () => setIsReferralModalOpen(!isReferralModalOpen);
 
   const categories = [
     'Parfums',
@@ -43,12 +54,10 @@ const Navbar = () => {
       {/* Top navbar with logo, search, and icons */}
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
-          {/* Logo */}
           <Link to="/" className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             ShopDelux
           </Link>
 
-          {/* Search bar - hidden on mobile */}
           <div className="hidden md:flex flex-1 max-w-xl mx-4">
             <div className="relative w-full">
               <input
@@ -62,9 +71,7 @@ const Navbar = () => {
             </div>
           </div>
 
-          {/* Icons */}
           <div className="flex items-center space-x-4">
-            {/* Mobile menu toggle */}
             <button 
               className="md:hidden"
               onClick={toggleMenu}
@@ -73,7 +80,6 @@ const Navbar = () => {
               {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
 
-            {/* Wishlist icon */}
             <Link to="/wishlist" className="relative hidden sm:block">
               <Heart className="h-6 w-6 hover:text-primary transition-colors" />
               {wishlistItems.length > 0 && (
@@ -83,7 +89,6 @@ const Navbar = () => {
               )}
             </Link>
 
-            {/* Cart icon */}
             <Link to="/cart" className="relative">
               <ShoppingCart className="h-6 w-6 hover:text-primary transition-colors" />
               {totalItems > 0 && (
@@ -93,7 +98,17 @@ const Navbar = () => {
               )}
             </Link>
 
-            {/* User icon */}
+            {!isAuthenticated && (
+              <>
+                <Link to="/login" className="text-sm font-medium hover:text-primary transition-colors">
+                  Se connecter
+                </Link>
+                <Link to="/register" className="text-sm font-medium hover:text-primary transition-colors">
+                  S'inscrire
+                </Link>
+              </>
+            )}
+
             <div className="relative">
               <button 
                 onClick={toggleUserMenu} 
@@ -111,14 +126,13 @@ const Navbar = () => {
                 )}
               </button>
 
-              {/* User dropdown menu */}
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 ring-1 ring-black ring-opacity-5 fade-in">
-                  {isAuthenticated ? (
+                  {isAuthenticated && user ? (
                     <>
                       <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                        <p className="text-sm font-medium text-gray-900">{user.name || 'Utilisateur'}</p>
+                        <p className="text-xs text-gray-500 truncate">{user.email || 'Email non disponible'}</p>
                       </div>
                       <Link 
                         to="/profile" 
@@ -128,14 +142,19 @@ const Navbar = () => {
                         <UserCircle className="mr-2 h-4 w-4" />
                         Gérer le profil
                       </Link>
-                      <Link 
-                        to="/register" 
-                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsUserMenuOpen(false)}
-                      >
-                        <UserCircle className="mr-2 h-4 w-4" />
-                       Sign up
-                      </Link>
+                      {user.role?.toLowerCase() === 'client' && (
+                        <button
+                          className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          onClick={() => {
+                            console.log('Opening referral modal for user:', user);
+                            toggleReferralModal();
+                            setIsUserMenuOpen(false);
+                          }}
+                        >
+                          <Share className="mr-2 h-4 w-4" />
+                          Votre code de parrainage
+                        </button>
+                      )}
                       <Link 
                         to="/orders" 
                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -143,14 +162,6 @@ const Navbar = () => {
                       >
                         <Package className="mr-2 h-4 w-4" />
                         Mes commandes
-                      </Link>
-                      <Link 
-                        to="/login" 
-                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsUserMenuOpen(false)}
-                      >
-                        <UserCircle className="mr-2 h-4 w-4" />
-                        Login
                       </Link>
                       <Link 
                         to="/messages" 
@@ -162,6 +173,7 @@ const Navbar = () => {
                       </Link>
                       <button 
                         onClick={() => {
+                          console.log('Logging out user:', user);
                           logout();
                           setIsUserMenuOpen(false);
                         }}
@@ -173,6 +185,10 @@ const Navbar = () => {
                     </>
                   ) : (
                     <>
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-sm font-medium text-gray-900">Visiteur</p>
+                        <p className="text-xs text-gray-500">Non connecté</p>
+                      </div>
                       <Link 
                         to="/login" 
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -195,7 +211,6 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Search bar - visible only on mobile */}
         <div className="mt-3 md:hidden">
           <div className="relative">
             <input
@@ -210,7 +225,6 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Categories navbar */}
       <nav className="bg-white border-t border-gray-200">
         <div className="container mx-auto px-4">
           <ul className="hidden md:flex items-center space-x-6 overflow-x-auto whitespace-nowrap py-3 scrollbar-hide">
@@ -228,7 +242,6 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* Mobile menu */}
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t border-gray-200 shadow-md slide-up">
           <ul className="py-2 px-4">
@@ -259,6 +272,26 @@ const Navbar = () => {
               </Link>
             </li>
           </ul>
+        </div>
+      )}
+
+      {isReferralModalOpen && user?.role?.toLowerCase() === 'client' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4">Votre code de parrainage</h2>
+            <p className="text-gray-700 mb-2">
+              Voici votre code de parrainage : <strong>{user.referral_code || 'Non disponible'}</strong>
+            </p>
+            <p className="text-gray-700 mb-4">
+              Partagez ce code avec vos amis. Pour chaque personne inscrite avec votre code, vous gagnez des réductions et des récompenses sur notre plateforme !
+            </p>
+            <button
+              className="btn-primary w-full"
+              onClick={toggleReferralModal}
+            >
+              Fermer
+            </button>
+          </div>
         </div>
       )}
     </header>
